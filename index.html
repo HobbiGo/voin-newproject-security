@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>VOIN AI ENGINE V1.0 (Real API)</title>
+<title>VOIN AI ENGINE V1.0</title>
 <style>
   body { background-color: #0b1020; color: white; font-family: monospace; padding: 20px; display: flex; justify-content: center; }
   .box { width: 100%; max-width: 500px; background: #111a2e; padding: 20px; border-radius: 10px; border: 1px solid #1f2a44; }
@@ -45,8 +45,11 @@
     chatBox.scrollTop = chatBox.scrollHeight;
 
     try {
-      // Tembak API Node.js
-      const response = await fetch('http://localhost:3000/api/chat', {
+      // TRIK CODESPACES: Mengubah localhost menjadi URL Codespaces secara otomatis
+      var host = window.location.host;
+      var apiUrl = "https://" + host.replace(/-33079\./, '-3000.') + "/api/chat";
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: teks })
