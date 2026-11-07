@@ -4,7 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const VoinNode = require('./voin-node');
 const VOINAssistant = require('./ai/assistant');
-const { initDB } = require('./database'); // Import Database
+const { initDB } = require('./database');
 
 const app = express();
 app.use(cors({ origin: '*' })); 
@@ -13,20 +13,18 @@ app.use(express.json());
 const node = new VoinNode('voin-mainnet-1');
 const userWallet = "04" + "a".repeat(128); 
 
-// Nyalakan server
 app.listen(3000, async () => {
   console.log(`🚀 VOIN AI API Server berjalan di http://localhost:3000`);
   
-  // Inisialisasi Database dulu
+  // INISIALISASI DATABASE
   await initDB();
   
-  // Cek akun
   const existingAccount = await node.getAccountState(userWallet);
   if (!existingAccount) {
     await node.setAccountState(userWallet, '1500', '5');
     console.log('✅ Akun simulasi berhasil didaftarkan ke Database (Saldo: 1500).');
   } else {
-    console.log('✅ Akun simulasi ditemukan di Database (Data tidak hilang).');
+    console.log('✅ Akun simulasi ditemukan di Database (Data tersimpan permanen).');
   }
 
   const ai = new VOINAssistant(node);
