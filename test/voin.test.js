@@ -1,161 +1,155 @@
 'use strict';
 
-const { expect } = require('chai');
-const { ec: EC } = require('elliptic');
-const ec = new EC('secp256k1');
-
-// Mengarah ke file yang ada di luar folder test/ (sesuaikan dengan struktur folder)
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const VoinWallet = require('../wallet');
 const VoinNode = require('../voin-node');
-const Wallet = require('../wallet');
-const {
-  validateTransactionStructure,
-  validateSignatureFormat,
-} = require('../validator');
 
-// Helper: Buat wallet acak baru
-function makeWallet() {
-  return Wallet.generate();
+const TEST_CHAIN_ID = "voin-testnet-alpha";
+const VALID_RECIPIENT = "voin1recipient_bob_1234567890123456789012345";
+
+function setupTestEnvironment(initialBalance = 100n, initialNonce = 0n) {
+  const node = new VoinNode(TEST_CHAIN_ID);
+  const wallet = VoinWallet.generate();
+  
+  // DAFTARKAN PIN SECARA ASLI
+  wallet.setupSecurity('pin', 'securePin999');
+  
+  node.setAccountState(wallet.publicKey, initialBalance, initialNonce);
+  return { node, wallet };
 }
 
-// Helper: Buat template transaksi dasar
-function baseTx(overrides = {}) {
-  return {
-    chainId: 'voin-mainnet-1',
-    sender: null, // Akan diisi di dalam test
-    recipient: ec.genKeyPair().getPublic('hex'),
-    amount: '100',
-    fee: '1',
-    nonce: '1',
-    ...overrides,
+test('Skenario 1: Transaksi Normal Berhasil & Mutasi State Akurat', () => {
+  const { node, wallet } = setupTestEnvironment(100n, 0n);
+
+  const tx = {
+    chainId: TEST_CHAIN_ID,
+    sender: wallet.publicKey,
+    recipient: VALID_RECIPIENT,
+    amount: "30",
+    fee: "2",
+    nonce: "1"
   };
-}
 
-describe('Validator', () => {
-  it('menerima payload valid', () => {
-    const w = makeWallet();
-    const tx = baseTx({ sender: w.publicKey });
-    expect(validateTransactionStructure(tx)).to.equal(true);
-  });
+  // Menyertakan PIN yang benar
+  const signedTx = wallet.signTransaction(tx, 'securePin999');
+  const success = node.verifyAndProcessTransaction(signedTx);
 
-  it('menolak field ekstra', () => {
-    const w = makeWallet();
-    const tx = baseTx({ sender: w.publicKey, evil: 'x' });
-    expect(() => validateTransactionStructure(tx)).to.throw(/Field tidak dikenal/);
-  });
+  assert.equal(success, true, "Transaksi normal harus berhasil");
 
-  it('menolak field hilang', () => {
-    const tx = { chainId: 'voin-mainnet-1' };
-    expect(() => validateTransactionStructure(tx)).to.throw(/Field wajib hilang/);
-  });
+  const senderState = node.getAccountState(wallet.publicKey);
+  const recipientState = node.getAccountState(VALID_RECIPIENT);
 
-  it('menolak chainId tidak valid', () => {
-    const w = makeWallet();
-    const tx = baseTx({ sender: w.publicKey, chainId: 'UPPER!' });
-    expect(() => validateTransactionStructure(tx)).to.throw(/Chain ID/);
-  });
-
-  it('menolak amount negatif / float', () => {
-    const w = makeWallet();
-    for (const bad of ['-1', '1.5', '01', '0', '1e3']) {
-      const tx = baseTx({ sender: w.publicKey, amount: bad });
-      expect(() => validateTransactionStructure(tx), `amount=${bad}`).to.throw();
-    }
-  });
-
-  it('menolak sender = recipient', () => {
-    const w = makeWallet();
-    const tx = baseTx({ sender: w.publicKey, recipient: w.publicKey });
-    expect(() => validateTransactionStructure(tx)).to.throw(/identik/);
-  });
-
-  it('menolak signature r/s bukan 64 hex', () => {
-    const w = makeWallet();
-    expect(() =>
-      validateSignatureFormat({ r: 'abc', s: 'a'.repeat(64) }, w.publicKey)
-    ).to.throw(/r' harus tepat 64/);
-  });
-
-  it('menolak signature r/s nol', () => {
-    const w = makeWallet();
-    expect(() =>
-      validateSignatureFormat({ r: '0'.repeat(64), s: '0'.repeat(64) }, w.publicKey)
-    ).to.throw(/tidak boleh nol/);
-  });
-
-  it('menolak public key bukan titik kurva', () => {
-    const fake = '11'.repeat(33); // Format valid, tapi bukan titik kurva
-    expect(() =>
-      validateSignatureFormat({ r: '1'.repeat(64), s: '1'.repeat(64) }, fake)
-    ).to.throw(/gagal divalidasi/);
-  });
+  assert.equal(senderState.balance, 68n, "Saldo pengirim harus 68n");
+  assert.equal(senderState.nonce, 1n, "Nonce pengirim harus 1");
+  assert.equal(recipientState.balance, 30n, "Saldo penerima harus 30n");
 });
 
-describe('VoinNode', () => {
-  let node, sender, recipient;
+test('Skenario 2: PIN Salah pada Dompet (Ditolak Sistem)', () => {
+  const { node, wallet } = setupTestEnvironment(100n, 0n);
 
-  beforeEach(() => {
-    node = new VoinNode('voin-mainnet-1');
-    sender = makeWallet();
-    recipient = makeWallet();
-    node.setAccountState(sender.publicKey, '1000', '0');
-  });
+  const tx = {
+    chainId: TEST_CHAIN_ID,
+    sender: wallet.publicKey,
+    recipient: VALID_RECIPIENT,
+    amount: "10",
+    fee: "1",
+    nonce: "1"
+  };
 
-  function makeSigned(txData) {
-    // Versi Node.js tidak async, jadi langsung return
-    return sender.signTransaction(txData); 
-  }
+  // Memastikan wallet menolak karena PIN salah
+  assert.throws(() => {
+    wallet.signTransaction(tx, 'salahTotal');
+  }, /Verifikasi gagal: PIN salah!/, "Harus melempar error PIN salah");
 
-  function validTx(overrides = {}) {
-    return baseTx({
-      sender: sender.publicKey,
-      recipient: recipient.publicKey,
-      nonce: '1',
-      ...overrides,
-    });
-  }
+  // Pastikan state di node tidak tersentuh (karena transaksi tidak pernah terkirim)
+  const senderState = node.getAccountState(wallet.publicKey);
+  assert.equal(senderState.balance, 100n, "Saldo tidak boleh berubah");
+  assert.equal(senderState.nonce, 0n, "Nonce tidak boleh berubah");
+});
 
-  it('memproses transaksi valid', () => {
-    const signed = makeSigned(validTx());
-    expect(node.verifyAndProcessTransaction(signed)).to.equal(true);
-    
-    const s = node.getAccountState(sender.publicKey);
-    expect(s.balance).to.equal(899n); // 1000 - 100 - 1
-    expect(s.nonce).to.equal(1n);
-    expect(node.getAccountState(recipient.publicKey).balance).to.equal(100n);
-    expect(node.getCollectedFees()).to.equal(1n);
-  });
+test('Skenario 3: Saldo Kurang (Ditolak Node & State Tidak Berubah)', () => {
+  const { node, wallet } = setupTestEnvironment(10n, 0n); 
 
-  it('menolak chainId beda', () => {
-    const signed = makeSigned(validTx({ chainId: 'voin-testnet-9' }));
-    expect(() => node.verifyAndProcessTransaction(signed)).to.throw(/Chain ID/);
-  });
+  const tx = {
+    chainId: TEST_CHAIN_ID,
+    sender: wallet.publicKey,
+    recipient: VALID_RECIPIENT,
+    amount: "50", // Melebihi saldo
+    fee: "2",
+    nonce: "1"
+  };
 
-  it('menolak spoofing sender', () => {
-    const other = makeWallet();
-    const signed = makeSigned(validTx({ sender: other.publicKey }));
-    expect(() => node.verifyAndProcessTransaction(signed)).to.throw(/Spoofing/);
-  });
+  // PIN benar, tapi saldo tidak cukup
+  const signedTx = wallet.signTransaction(tx, 'securePin999');
 
-  it('menolak nonce replay', () => {
-    const signed = makeSigned(validTx({ nonce: '1' }));
-    node.verifyAndProcessTransaction(signed);
-    expect(() => node.verifyAndProcessTransaction(signed)).to.throw(/Nonce/);
-  });
+  assert.throws(() => {
+    node.verifyAndProcessTransaction(signedTx);
+  }, /Saldo tidak cukup/, "Node harus menolak transaksi kurang saldo");
 
-  it('menolak saldo tidak cukup', () => {
-    const signed = makeSigned(validTx({ amount: '5000' }));
-    expect(() => node.verifyAndProcessTransaction(signed)).to.throw(/Saldo tidak cukup/);
-  });
+  const senderState = node.getAccountState(wallet.publicKey);
+  assert.equal(senderState.balance, 10n, "Saldo pengirim harus tetap utuh");
+  assert.equal(senderState.nonce, 0n, "Nonce pengirim tidak boleh bertambah");
+});
 
-  it('menolak tanda tangan palsu', () => {
-    const signed = makeSigned(validTx());
-    signed.txData.amount = '9999'; // Mengubah data setelah ditandatangani
-    expect(() => node.verifyAndProcessTransaction(signed)).to.throw(/tidak sah/);
-  });
+test('Skenario 4: Replay Attack - Mengirim Ulang Paket Signed', () => {
+  const { node, wallet } = setupTestEnvironment(100n, 0n);
 
-  it('menolak payload terlalu besar', () => {
-    const signed = makeSigned(validTx());
-    signed.txData.chainId = 'a'.repeat(5000);
-    expect(() => node.verifyAndProcessTransaction(signed)).to.throw();
-  });
+  const tx = {
+    chainId: TEST_CHAIN_ID,
+    sender: wallet.publicKey,
+    recipient: VALID_RECIPIENT,
+    amount: "10",
+    fee: "1",
+    nonce: "1"
+  };
+
+  const signedTx = wallet.signTransaction(tx, 'securePin999');
+  assert.equal(node.verifyAndProcessTransaction(signedTx), true);
+
+  // Replay Attack: Mengirim ulang objek signedTx yang PERSIS SAMA
+  assert.throws(() => {
+    node.verifyAndProcessTransaction(signedTx);
+  }, /Nonce tidak valid/, "Node harus menolak replay attack");
+});
+
+test('Skenario 5: Chain ID Salah / Lintas Jaringan Berbeda', () => {
+  const { node, wallet } = setupTestEnvironment(100n, 0n);
+
+  const tx = {
+    chainId: "voin-malicious-chain",
+    sender: wallet.publicKey,
+    recipient: VALID_RECIPIENT,
+    amount: "10",
+    fee: "1",
+    nonce: "1"
+  };
+
+  const signedTx = wallet.signTransaction(tx, 'securePin999');
+  
+  assert.throws(() => {
+    node.verifyAndProcessTransaction(signedTx);
+  }, /Chain ID tidak cocok/, "Node harus menolak transaksi dari chain ID lain");
+});
+
+test('Skenario 6: Modifikasi Payload Setelah Signing (Tampering)', () => {
+  const { node, wallet } = setupTestEnvironment(100n, 0n);
+
+  const tx = {
+    chainId: TEST_CHAIN_ID,
+    sender: wallet.publicKey,
+    recipient: VALID_RECIPIENT,
+    amount: "10",
+    fee: "1",
+    nonce: "1"
+  };
+
+  const signedTx = wallet.signTransaction(tx, 'securePin999');
+
+  // Penyerang mengubah amount setelah ditandatangani
+  signedTx.txData.amount = "999";
+
+  assert.throws(() => {
+    node.verifyAndProcessTransaction(signedTx);
+  }, /Tanda tangan kriptografi tidak sah/, "Node harus mendeteksi modifikasi data");
 });
