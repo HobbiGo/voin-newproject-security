@@ -21,10 +21,7 @@ const ai = new VOINAssistant(node);
 app.post('/api/chat', async (req, res) => {
   try {
     const userPrompt = req.body.message;
-    
-    // AI memproses pesan dari UI HTML
     const aiResponse = await ai.chat(userPrompt, userWallet);
-    
     res.json({ reply: aiResponse });
   } catch (error) {
     res.status(500).json({ reply: "[Error]: Sistem AI gagal memproses." });
@@ -35,5 +32,4 @@ app.post('/api/chat', async (req, res) => {
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 VOIN AI API Server berjalan di http://localhost:${PORT}`);
-  console.log(`Dompet Simulasi: ${userWallet}`);
 });
