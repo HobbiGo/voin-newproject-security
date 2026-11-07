@@ -1,44 +1,65 @@
 'use strict';
-const sqlite3 = require('sqlite3').verbose();
+const initSqlJs = require('sql.js');
+const fs = require('fs');
 
-// Membuat/membuka file database
-const db = new sqlite3.Database('./voin.db');
+let db = null;
+let SQL = null;
 
-// Inisialisasi Tabel (hanya dibuat jika belum ada)
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS accounts (
-      publicKey TEXT PRIMARY KEY,
-      balance TEXT NOT NULL,
-      nonce TEXT NOT NULL
-    )
-  `);
-});
+// Inisialisasi Database secara Asinkron
+async function initDB() {
+  if (db) return;
+  SQL = await initSqlJs();
+  
+  // Cek apakah file database sudah ada
+  if (fs.existsSync('./voin.db')) {
+    const filebuffer = fs.readFileSync('./voin.db');
+    db = new SQL.Database(filebuffer);
+  } else {
+    db = new SQL.Database();
+  }
+
+  // Buat tabel jika belum ada
+  db.run(`CREATE TABLE IF NOT EXISTS accounts (publicKey TEXT PRIMARY KEY, balance TEXT NOT NULL, nonce TEXT NOT NULL);`);
+  saveToFile();
+}
+
+// Simpan memori ke file fisik
+function saveToFile() {
+  const data = db.export();
+  const buffer = Buffer.from(data);
+  fs.writeFileSync('./voin.db', buffer);
+}
+
+// Helper untuk Query (SELECT)
+function getRow(query, params) {
+  const stmt = db.prepare(query);
+  stmt.bind(params);
+  if (stmt.step()) {
+    const row = stmt.getAsObject();
+    stmt.free();
+    return row;
+  }
+  stmt.free();
+  return null;
+}
 
 module.exports = {
-  // Simpan atau Update state akun
-  saveAccount: (publicKey, balance, nonce) => {
-    return new Promise((resolve, reject) => {
-      const query = `
-        INSERT INTO accounts (publicKey, balance, nonce) 
-        VALUES (?, ?, ?) 
-        ON CONFLICT(publicKey) DO UPDATE SET balance=excluded.balance, nonce=excluded.nonce
-      `;
-      db.run(query, [publicKey, balance.toString(), nonce.toString()], function(err) {
-        if (err) reject(err);
-        else resolve(true);
-      });
-    });
+  initDB,
+  saveAccount: async (publicKey, balance, nonce) => {
+    await initDB();
+    const query = `
+      INSERT INTO accounts (publicKey, balance, nonce) 
+      VALUES (?, ?, ?) 
+      ON CONFLICT(publicKey) DO UPDATE SET balance=excluded.balance, nonce=excluded.nonce
+    `;
+    db.run(query, [publicKey, balance.toString(), nonce.toString()]);
+    saveToFile();
+    return true;
   },
-
-  // Ambil state akun
-  getAccount: (publicKey) => {
-    return new Promise((resolve, reject) => {
-      db.get(`SELECT * FROM accounts WHERE publicKey = ?`, [publicKey], (err, row) => {
-        if (err) reject(err);
-        else if (!row) resolve(undefined);
-        else resolve({ balance: BigInt(row.balance), nonce: BigInt(row.nonce) });
-      });
-    });
+  getAccount: async (publicKey) => {
+    await initDB();
+    const row = getRow(`SELECT * FROM accounts WHERE publicKey = ?`, [publicKey]);
+    if (!row) return undefined;
+    return { balance: BigInt(row.balance), nonce: BigInt(row.nonce) };
   }
 };
