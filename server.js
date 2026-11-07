@@ -9,15 +9,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 1. Nyalakan VOIN CORE
+// Nyalakan VOIN CORE
 const node = new VoinNode('voin-mainnet-1');
 const userWallet = "04" + "a".repeat(128); 
 node.setAccountState(userWallet, '1500', '5'); 
 
-// 2. Nyalakan AI Engine
+// Nyalakan AI Engine
 const ai = new VOINAssistant(node);
 
-// 3. Buat Endpoint API
+// Endpoint API
 app.post('/api/chat', async (req, res) => {
   try {
     const userPrompt = req.body.message;
@@ -28,7 +28,7 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// 4. Jalankan Server di Port 3000
+// Jalankan Server
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 VOIN AI API Server berjalan di http://localhost:${PORT}`);
