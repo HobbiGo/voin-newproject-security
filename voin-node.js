@@ -1,76 +1,110 @@
 'use strict';
-const { ec: EC } = require('elliptic');
-const ec = new EC('secp256k1');
-const { canonicalizeAndHash } = require('./crypto-utils');
-const { validateTransactionStructure, validateSignatureFormat } = require('./validator');
 
-class VoinNode {
-  #stateDB = new Map();
-  #totalFeesCollected = 0n;
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const VoinWallet = require('../wallet');
+const VoinNode = require('../voin-node');
 
-  constructor(chainId = 'voin-mainnet-1') {
-    if (typeof chainId !== 'string' || !chainId.trim()) throw new Error('[Node Init] chainId tidak valid.');
-    this.chainId = chainId;
-  }
+const TEST_CHAIN_ID = "voin-testnet-alpha";
+const VALID_RECIPIENT = "voin1recipient_bob_1234567890123456789012345";
 
-  setAccountState(publicKey, balance, nonce) {
-    this.#stateDB.set(publicKey, { balance: BigInt(balance), nonce: BigInt(nonce) });
-  }
-
-  getAccountState(publicKey) {
-    const s = this.#stateDB.get(publicKey);
-    return s ? { balance: s.balance, nonce: s.nonce } : undefined;
-  }
-
-  getCollectedFees() { return this.#totalFeesCollected; }
-
-  verifyAndProcessTransaction(signedTransaction) {
-    if (!signedTransaction || typeof signedTransaction !== 'object' || Array.isArray(signedTransaction)) {
-      throw new Error('[Node Reject] Paket transaksi kosong atau tidak valid.');
-    }
-    const { txData, publicKey, signature } = signedTransaction;
-
-    try {
-      validateTransactionStructure(txData);
-      validateSignatureFormat(signature, publicKey);
-    } catch (err) { throw new Error(`[Node Reject] ${err.message}`); }
-
-    if (txData.chainId !== this.chainId) throw new Error('[Node Reject] Chain ID tidak cocok!');
-    if (txData.sender !== publicKey) throw new Error('[Node Reject] Spoofing terdeteksi!');
-    
-    if (!this.#stateDB.has(publicKey)) throw new Error('[Node Reject] Akun pengirim tidak terdaftar.');
-    const account = this.#stateDB.get(publicKey);
-
-    const key = ec.keyFromPublic(publicKey, 'hex');
-    const { txHash } = canonicalizeAndHash(txData);
-    let valid = false;
-    try { valid = key.verify(txHash, signature); }
-    catch { throw new Error('[Node Reject] Proses verifikasi kriptografi gagal.'); }
-    if (!valid) throw new Error('[Node Reject] Tanda tangan kriptografi tidak sah!');
-
-    const amount = BigInt(txData.amount);
-    const fee    = BigInt(txData.fee);
-    const nonce  = BigInt(txData.nonce);
-
-    if (nonce !== account.nonce + 1n) {
-      throw new Error(`[Node Reject] Nonce tidak valid! Diterima: ${nonce}, Diharapkan: ${account.nonce + 1n}`);
-    }
-
-    const totalCost = amount + fee;
-    if (account.balance < totalCost) {
-      throw new Error(`[Node Reject] Saldo tidak cukup. Saldo: ${account.balance}, Dibutuhkan: ${totalCost}`);
-    }
-
-    // Mutasi State
-    account.balance -= totalCost;
-    account.nonce += 1n;
-    this.#totalFeesCollected += fee;
-
-    if (!this.#stateDB.has(txData.recipient)) this.#stateDB.set(txData.recipient, { balance: 0n, nonce: 0n });
-    this.#stateDB.get(txData.recipient).balance += amount;
-
-    return true;
-  }
+function setupTestEnvironment(initialBalance = 100n, initialNonce = 0n) {
+  const node = new VoinNode(TEST_CHAIN_ID);
+  const wallet = VoinWallet.generate();
+  wallet.setupSecurity('pin', 'securePin999');
+  node.setAccountState(wallet.publicKey, initialBalance, initialNonce);
+  return { node, wallet };
 }
 
-module.exports = VoinNode;
+test('Skenario 1: Transaksi Normal Berhasil & Mutasi State Akurat', () => {
+  const { node, wallet } = setupTestEnvironment(100n, 0n);
+  const tx = {
+    chainId: TEST_CHAIN_ID, sender: wallet.publicKey, recipient: VALID_RECIPIENT,
+    amount: "30", fee: "2", nonce: "1"
+  };
+  const signedTx = wallet.signTransaction(tx, 'securePin999');
+  const success = node.verifyAndProcessTransaction(signedTx);
+
+  assert.equal(success, true, "Transaksi normal harus berhasil");
+  const senderState = node.getAccountState(wallet.publicKey);
+  const recipientState = node.getAccountState(VALID_RECIPIENT);
+
+  assert.equal(senderState.balance, 68n, "Saldo pengirim harus 68n");
+  assert.equal(senderState.nonce, 1n, "Nonce pengirim harus 1");
+  assert.equal(recipientState.balance, 30n, "Saldo penerima harus 30n");
+});
+
+test('Skenario 2: PIN Salah pada Dompet (Ditolak Sistem)', () => {
+  const { node, wallet } = setupTestEnvironment(100n, 0n);
+  const tx = {
+    chainId: TEST_CHAIN_ID, sender: wallet.publicKey, recipient: VALID_RECIPIENT,
+    amount: "10", fee: "1", nonce: "1"
+  };
+
+  assert.throws(() => {
+    wallet.signTransaction(tx, 'salahTotal');
+  }, /Verifikasi gagal: PIN salah!/, "Harus melempar error PIN salah");
+
+  const senderState = node.getAccountState(wallet.publicKey);
+  assert.equal(senderState.balance, 100n, "Saldo tidak boleh berubah");
+  assert.equal(senderState.nonce, 0n, "Nonce tidak boleh berubah");
+});
+
+test('Skenario 3: Saldo Kurang (Ditolak Node & State Tidak Berubah)', () => {
+  const { node, wallet } = setupTestEnvironment(10n, 0n); 
+  const tx = {
+    chainId: TEST_CHAIN_ID, sender: wallet.publicKey, recipient: VALID_RECIPIENT,
+    amount: "50", fee: "2", nonce: "1"
+  };
+  const signedTx = wallet.signTransaction(tx, 'securePin999');
+
+  assert.throws(() => {
+    node.verifyAndProcessTransaction(signedTx);
+  }, /Saldo tidak cukup/, "Node harus menolak transaksi kurang saldo");
+
+  const senderState = node.getAccountState(wallet.publicKey);
+  assert.equal(senderState.balance, 10n, "Saldo pengirim harus tetap utuh");
+  assert.equal(senderState.nonce, 0n, "Nonce pengirim tidak boleh bertambah");
+});
+
+test('Skenario 4: Replay Attack - Mengirim Ulang Paket Signed', () => {
+  const { node, wallet } = setupTestEnvironment(100n, 0n);
+  const tx = {
+    chainId: TEST_CHAIN_ID, sender: wallet.publicKey, recipient: VALID_RECIPIENT,
+    amount: "10", fee: "1", nonce: "1"
+  };
+  const signedTx = wallet.signTransaction(tx, 'securePin999');
+  assert.equal(node.verifyAndProcessTransaction(signedTx), true);
+
+  assert.throws(() => {
+    node.verifyAndProcessTransaction(signedTx);
+  }, /Nonce tidak valid/, "Node harus menolak replay attack");
+});
+
+test('Skenario 5: Chain ID Salah / Lintas Jaringan Berbeda', () => {
+  const { node, wallet } = setupTestEnvironment(100n, 0n);
+  const tx = {
+    chainId: "voin-malicious-chain", sender: wallet.publicKey, recipient: VALID_RECIPIENT,
+    amount: "10", fee: "1", nonce: "1"
+  };
+  const signedTx = wallet.signTransaction(tx, 'securePin999');
+  
+  assert.throws(() => {
+    node.verifyAndProcessTransaction(signedTx);
+  }, /Chain ID tidak cocok/, "Node harus menolak transaksi dari chain ID lain");
+});
+
+test('Skenario 6: Modifikasi Payload Setelah Signing (Tampering)', () => {
+  const { node, wallet } = setupTestEnvironment(100n, 0n);
+  const tx = {
+    chainId: TEST_CHAIN_ID, sender: wallet.publicKey, recipient: VALID_RECIPIENT,
+    amount: "10", fee: "1", nonce: "1"
+  };
+  const signedTx = wallet.signTransaction(tx, 'securePin999');
+  
+  signedTx.txData.amount = "999"; // Penyerang mengubah amount
+
+  assert.throws(() => {
+    node.verifyAndProcessTransaction(signedTx);
+  }, /Tanda tangan kriptografi tidak sah/, "Node harus mendeteksi modifikasi data");
+});
