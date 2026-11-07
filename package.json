@@ -1,0 +1,15 @@
+{
+  "name": "voin-demo",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "test": "mocha test/**/*.test.js"
+  },
+  "dependencies": {
+    "elliptic": "^6.5.4"
+  },
+  "devDependencies": {
+    "chai": "^4.3.10",
+    "mocha": "^10.2.0"
+  }
+}
