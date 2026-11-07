@@ -5,12 +5,10 @@ const fs = require('fs');
 let db = null;
 let SQL = null;
 
-// Inisialisasi Database secara Asinkron
 async function initDB() {
   if (db) return;
   SQL = await initSqlJs();
   
-  // Cek apakah file database sudah ada
   if (fs.existsSync('./voin.db')) {
     const filebuffer = fs.readFileSync('./voin.db');
     db = new SQL.Database(filebuffer);
@@ -18,19 +16,16 @@ async function initDB() {
     db = new SQL.Database();
   }
 
-  // Buat tabel jika belum ada
   db.run(`CREATE TABLE IF NOT EXISTS accounts (publicKey TEXT PRIMARY KEY, balance TEXT NOT NULL, nonce TEXT NOT NULL);`);
   saveToFile();
 }
 
-// Simpan memori ke file fisik
 function saveToFile() {
   const data = db.export();
   const buffer = Buffer.from(data);
   fs.writeFileSync('./voin.db', buffer);
 }
 
-// Helper untuk Query (SELECT)
 function getRow(query, params) {
   const stmt = db.prepare(query);
   stmt.bind(params);
