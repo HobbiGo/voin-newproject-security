@@ -4,7 +4,7 @@ const { expect } = require('chai');
 const { ec: EC } = require('elliptic');
 const ec = new EC('secp256k1');
 
-// Mengarah ke file yang ada di luar folder test/ (sesuai struktur Opsi B)
+// Mengarah ke file yang ada di luar folder test/ (sesuaikan dengan struktur folder)
 const VoinNode = require('../voin-node');
 const Wallet = require('../wallet');
 const {
@@ -101,8 +101,7 @@ describe('VoinNode', () => {
   });
 
   function makeSigned(txData) {
-    // PERHATIAN: Di kode Wallet versi Node, signTransaction TIDAK async (synchronous).
-    // Jika di kodemu dibuat async, ubah ini menjadi: return await sender.signTransaction(txData);
+    // Versi Node.js tidak async, jadi langsung return
     return sender.signTransaction(txData); 
   }
 
