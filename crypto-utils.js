@@ -1,5 +1,12 @@
 'use strict';
 const crypto = require('crypto');
+
+// Fungsi Hash SHA-256 standar
+function sha256(str) {
+  return crypto.createHash('sha256').update(str, 'utf8').digest('hex');
+}
+
+// Fungsi Hash Transaksi (Kanonikalisasi)
 function canonicalizeAndHash(txData) {
   if (!txData || typeof txData !== 'object' || Array.isArray(txData)) {
     throw new Error('[Crypto] txData harus berupa objek non-array.');
@@ -11,4 +18,5 @@ function canonicalizeAndHash(txData) {
   const txHash = crypto.createHash('sha256').update(canonicalString, 'utf8').digest();
   return { txHash, canonicalString };
 }
-module.exports = { canonicalizeAndHash };
+
+module.exports = { canonicalizeAndHash, sha256 };
