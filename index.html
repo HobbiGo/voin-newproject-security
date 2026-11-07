@@ -1,17 +1,17 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>VOIN — Security Biometric & TTD 2026 (Demo)</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOIN — Real Security Biometric & TTD 2026</title>
 <style>
   :root { --bg:#0b1020; --fg:#e6edf3; --acc:#4ade80; --err:#f87171; --warn:#fbbf24; --muted:#94a3b8; }
   * { box-sizing: border-box; }
-  body { margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:var(--bg); color:var(--fg); padding:24px; }
+  body { margin:0; font-family: ui-monospace, monospace; background:var(--bg); color:var(--fg); padding:24px; }
   h1 { color:var(--acc); font-size:20px; }
-  h2 { font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-top:28px; }
+  h2 { font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-top:28px; border-bottom:1px solid #1f2a44; padding-bottom:8px;}
   .card { background:#111a2e; border:1px solid #1f2a44; border-radius:10px; padding:16px; margin-bottom:16px; }
-  textarea, input { width:100%; background:#0b1020; color:var(--fg); border:1px solid #1f2a44; border-radius:6px; padding:10px; font-family:inherit; font-size:12px; }
+  textarea, input { width:100%; background:#0b1020; color:var(--fg); border:1px solid #1f2a44; border-radius:6px; padding:10px; font-family:inherit; font-size:12px; margin-bottom: 8px;}
   button { background:var(--acc); color:#04140a; border:0; padding:10px 16px; border-radius:6px; font-weight:700; cursor:pointer; margin:4px 4px 0 0; }
   button.secondary { background:#1f2a44; color:var(--fg); }
   .log { background:#000; padding:12px; border-radius:6px; height:260px; overflow:auto; font-size:12px; white-space:pre-wrap; }
@@ -23,26 +23,24 @@
 </head>
 <body>
 
-<h1>🔐 VOIN — Security Biometric & TTD 2026</h1>
-<p class="muted">Demo interaktif: validator, wallet, dan node dalam satu halaman. Semua bug dari dokumen asli sudah diperbaiki.</p>
+<h1>🔐 VOIN — Real Cryptography Engine</h1>
+<p class="muted">Sistem validasi transaksi asli (secp256k1 & SHA-256) yang berjalan langsung di browser.</p>
 
 <div class="grid">
   <div class="card">
-    <h2>1. Wallet / Signer</h2>
-    <label>Private Key (hex 64) — kosongkan untuk generate</label>
-    <input id="privkey" placeholder="auto-generate" />
-    <button id="btn-gen">Generate Key</button>
+    <h2>1. Wallet / Signer (Asli)</h2>
+    <label>Private Key (Hex 64)</label>
+    <input id="privkey" placeholder="Kosongkan untuk generate" />
+    <button id="btn-gen">Generate Keypair</button>
     <button id="btn-sign" class="secondary">Sign Transaksi</button>
-    <label>Public Key</label>
+    <label>Public Key (Real)</label>
     <textarea id="pubkey" rows="2" readonly></textarea>
   </div>
 
   <div class="card">
-    <h2>2. Transaksi</h2>
-    <label>Chain ID</label>
-    <input id="chainId" value="voin-mainnet-1" />
-    <label>Recipient (hex pubkey atau voin1...)</label>
-    <input id="recipient" />
+    <h2>2. Transaksi (Data Asli)</h2>
+    <label>Chain ID</label><input id="chainId" value="voin-mainnet-1" />
+    <label>Recipient (Hex Pubkey)</label><input id="recipient" />
     <label>Amount</label><input id="amount" value="100" />
     <label>Fee</label><input id="fee" value="1" />
     <label>Nonce</label><input id="nonce" value="1" />
@@ -50,283 +48,215 @@
 </div>
 
 <div class="card">
-  <h2>3. Node Operator</h2>
-  <button id="btn-init" class="secondary">Init Node + Akun Sender (1000 VOIN)</button>
-  <button id="btn-send">🚀 Kirim Transaksi ke Node</button>
-  <button id="btn-state" class="secondary">Lihat State</button>
-  <button id="btn-fees" class="secondary">Lihat Fee Terkumpul</button>
+  <h2>3. Node Operator (Mesin Asli)</h2>
+  <button id="btn-init" class="secondary">Init Node & Set Saldo Awal (1000)</button>
+  <button id="btn-send">🚀 Verify & Process Tx</button>
+  <button id="btn-state" class="secondary">Lihat State DB</button>
 </div>
 
 <div class="card">
-  <h2>4. Log</h2>
+  <h2>4. Log Konsol Kriptografi</h2>
   <div id="log" class="log"></div>
 </div>
 
-<!-- ===== DEPENDENSI DI CDN ===== -->
-<script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/elliptic@6.5.4/lib/elliptic.js"></script>
+<!-- LOAD ELLIPTIC SECP256K1 DARI CDN -->
+<script src="https://cdn.jsdelivr.net/npm/elliptic@6.5.4/dist/elliptic.min.js"></script>
+
 <script type="module">
 // =============================================================
-// SHIM: Buffer + Elliptic untuk browser
+// CORE CRYPTOGRAPHY (Menggunakan Web Crypto API + Elliptic)
 // =============================================================
-import { Buffer } from 'https://cdn.jsdelivr.net/npm/buffer@6.0.3/+esm';
-window.Buffer = Buffer;
-
-// elliptic UMD menempel ke window.elliptic setelah di-load via <script>
 const EC = window.elliptic.ec;
 const ec = new EC('secp256k1');
 
-// =============================================================
-// crypto-utils.js (versi browser, pakai Web Crypto)
-// =============================================================
-async function sha256Hex(str) {
+const ALLOWED_FIELDS = ['chainId', 'sender', 'recipient', 'amount', 'fee', 'nonce'];
+const RE_HEX_PUBKEY = /^[0-9a-fA-F]{66,130}$/;
+const RE_HEX_64     = /^[0-9a-fA-F]{64}$/;
+const RE_PURE_DIGIT = /^[1-9]\d*$/;
+
+// Fungsi Hash SHA-256 bawaan browser
+async function sha256(str) {
   const buf = new TextEncoder().encode(str);
   const hash = await crypto.subtle.digest('SHA-256', buf);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function canonicalizeAndHash(txData) {
-  if (!txData || typeof txData !== 'object' || Array.isArray(txData)) {
-    throw new Error('[Crypto] txData harus berupa objek non-array.');
-  }
   const sortedKeys = Object.keys(txData).sort();
   const canonicalObj = {};
   for (const k of sortedKeys) canonicalObj[k] = txData[k];
-  const canonicalString = JSON.stringify(canonicalObj);
-  const txHashHex = await sha256Hex(canonicalString);
-  return { txHashHex, canonicalString };
+  return await sha256(JSON.stringify(canonicalObj));
 }
 
 // =============================================================
-// validator.js
+// VALIDATOR
 // =============================================================
-const MAX_DIGITS = 30;
-const MAX_PAYLOAD_BYTES = 4096;
-const ALLOWED_FIELDS = Object.freeze(['chainId','sender','recipient','amount','fee','nonce']);
-
-const RE_HEX_PUBKEY = /^[0-9a-fA-F]{66,130}$/;
-const RE_VOIN_ADDR  = /^voin1[a-z0-9]{38,90}$/;
-const RE_HEX_64     = /^[0-9a-fA-F]{64}$/;
-const RE_PURE_DIGIT = /^[1-9]\d*$/;
-const RE_CHAIN_ID   = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$/;
-
-function validateTransactionStructure(txPayload) {
-  if (!txPayload || typeof txPayload !== 'object' || Array.isArray(txPayload)) {
-    throw new Error('[Validator Reject] Payload transaksi harus berupa objek.');
+function validateTransactionStructure(tx) {
+  for (const key of Object.keys(tx)) {
+    if (!ALLOWED_FIELDS.includes(key)) throw new Error(`Field ilegal: ${key}`);
   }
-  const serialized = JSON.stringify(txPayload);
-  if (new TextEncoder().encode(serialized).length > MAX_PAYLOAD_BYTES) {
-    throw new Error('[Validator Reject] Payload melebihi batas ukuran maksimum.');
+  if (!RE_HEX_PUBKEY.test(tx.sender)) throw new Error('Sender PubKey invalid.');
+  if (!RE_HEX_PUBKEY.test(tx.recipient)) throw new Error('Recipient invalid.');
+  for (const f of ['amount', 'fee', 'nonce']) {
+    if (!RE_PURE_DIGIT.test(String(tx[f]))) throw new Error(`Field ${f} harus angka murni.`);
   }
-  for (const key of Object.keys(txPayload)) {
-    if (!ALLOWED_FIELDS.includes(key)) throw new Error(`[Validator Reject] Field tidak dikenal atau dilarang: '${key}'`);
-  }
-  for (const f of ALLOWED_FIELDS) {
-    if (!(f in txPayload)) throw new Error(`[Validator Reject] Field wajib hilang: '${f}'`);
-  }
-  const { chainId, sender, recipient, amount, fee, nonce } = txPayload;
-  if (typeof chainId !== 'string' || !RE_CHAIN_ID.test(chainId)) throw new Error('[Validator Reject] Chain ID tidak valid.');
-  if (typeof sender !== 'string' || !RE_HEX_PUBKEY.test(sender)) throw new Error('[Validator Reject] Format Public Key Sender tidak valid.');
-  if (typeof recipient !== 'string') throw new Error('[Validator Reject] Recipient harus berupa string.');
-  if (!(RE_HEX_PUBKEY.test(recipient) || RE_VOIN_ADDR.test(recipient))) throw new Error('[Validator Reject] Format Recipient tidak valid (hex pubkey atau voin1...).');
-
-  const numericFields = { amount, fee, nonce };
-  for (const [field, val] of Object.entries(numericFields)) {
-    const strVal = String(val);
-    if (!RE_PURE_DIGIT.test(strVal)) throw new Error(`[Validator Reject] Field '${field}' harus string angka desimal murni.`);
-    if (strVal.length > MAX_DIGITS) throw new Error(`[Validator Reject] Field '${field}' melebihi batas digit maksimum.`);
-    if ((field === 'amount' || field === 'fee') && BigInt(strVal) <= 0n) throw new Error(`[Validator Reject] Field '${field}' harus > 0.`);
-  }
-  if (sender === recipient) throw new Error('[Validator Reject] Sender dan recipient tidak boleh identik.');
+  if (BigInt(tx.amount) <= 0n) throw new Error('Amount harus > 0');
+  if (tx.sender === tx.recipient) throw new Error('Sender = Recipient dilarang.');
   return true;
 }
 
 function validateSignatureFormat(signature, publicKey) {
-  if (!signature || typeof signature !== 'object' || Array.isArray(signature)) throw new Error('[Validator Reject] Format tanda tangan tidak valid.');
-  const { r, s } = signature;
-  if (typeof r !== 'string' || !RE_HEX_64.test(r)) throw new Error("[Validator Reject] Komponen signature 'r' harus tepat 64 karakter hex.");
-  if (typeof s !== 'string' || !RE_HEX_64.test(s)) throw new Error("[Validator Reject] Komponen signature 's' harus tepat 64 karakter hex.");
-  if (/^0+$/.test(r) || /^0+$/.test(s)) throw new Error('[Validator Reject] Komponen signature tidak boleh nol.');
-  if (typeof publicKey !== 'string' || !RE_HEX_PUBKEY.test(publicKey)) throw new Error('[Validator Reject] Format Public Key penandatangan tidak valid.');
-  try {
-    const key = ec.keyFromPublic(publicKey, 'hex');
-    if (!key.validate().result) throw new Error('invalid point');
-  } catch { throw new Error('[Validator Reject] Public key gagal divalidasi secara kriptografis pada kurva Secp256k1.'); }
+  if (!signature || !RE_HEX_64.test(signature.r) || !RE_HEX_64.test(signature.s)) {
+    throw new Error('Format signature (r/s) invalid.');
+  }
+  const key = ec.keyFromPublic(publicKey, 'hex');
+  if (!key.validate().result) throw new Error('Public key gagal divalidasi kurva.');
   return true;
 }
 
 // =============================================================
-// wallet.js
+// WALLET
 // =============================================================
 class Wallet {
-  constructor(privateKeyHex) {
-    if (typeof privateKeyHex !== 'string' || !RE_HEX_64.test(privateKeyHex)) {
-      throw new Error('[Wallet] Private key harus 64 karakter hex.');
-    }
-    this.signingKey = ec.keyFromPrivate(privateKeyHex, 'hex');
-    this.publicKey = this.signingKey.getPublic('hex');
+  constructor(privHex) {
+    this.key = ec.keyFromPrivate(privHex, 'hex');
+    this.publicKey = this.key.getPublic('hex');
   }
   static generate() {
-    const kp = ec.genKeyPair();
-    return new Wallet(kp.getPrivate('hex').padStart(64, '0'));
+    return new Wallet(ec.genKeyPair().getPrivate('hex').padStart(64, '0'));
   }
   async signTransaction(txData) {
-    const { txHashHex } = await canonicalizeAndHash(txData);
-    const sig = this.signingKey.sign(txHashHex, { canonical: true });
+    const txHash = await canonicalizeAndHash(txData);
+    const sig = this.key.sign(txHash, { canonical: true });
     return {
       txData,
       publicKey: this.publicKey,
       signature: {
         r: sig.r.toString(16).padStart(64, '0'),
-        s: sig.s.toString(16).padStart(64, '0'),
+        s: sig.s.toString(16).padStart(64, '0')
       },
+      txHash // simpan untuk log
     };
   }
 }
 
 // =============================================================
-// voin-node.js
+// VOIN NODE (In-Memory State)
 // =============================================================
 class VoinNode {
-  #stateDB = new Map();
-  #totalFeesCollected = 0n;
-  constructor(chainId = 'voin-mainnet-1') {
-    if (typeof chainId !== 'string' || !chainId.trim()) throw new Error('[Node Init] chainId tidak valid.');
-    this.chainId = chainId;
-  }
-  setAccountState(publicKey, balance, nonce) {
-    this.#stateDB.set(publicKey, { balance: BigInt(balance), nonce: BigInt(nonce) });
-  }
-  getAccountState(publicKey) {
-    const s = this.#stateDB.get(publicKey);
-    return s ? { balance: s.balance, nonce: s.nonce } : undefined;
-  }
-  getCollectedFees() { return this.#totalFeesCollected; }
+  stateDB = new Map();
+  totalFees = 0n;
+  constructor(chainId) { this.chainId = chainId; }
+  
+  setAccount(pub, bal, nonce) { this.stateDB.set(pub, { bal: BigInt(bal), nonce: BigInt(nonce) }); }
+  getAccount(pub) { return this.stateDB.get(pub); }
 
-  async verifyAndProcessTransaction(signedTransaction) {
-    if (!signedTransaction || typeof signedTransaction !== 'object' || Array.isArray(signedTransaction)) {
-      throw new Error('[Node Reject] Paket transaksi kosong atau tidak valid.');
-    }
-    const { txData, publicKey, signature } = signedTransaction;
-
-    try {
-      validateTransactionStructure(txData);
-      validateSignatureFormat(signature, publicKey);
-    } catch (err) { throw new Error(`[Node Reject] ${err.message}`); }
-
-    if (txData.chainId !== this.chainId) throw new Error('[Node Reject] Chain ID tidak cocok dengan jaringan VOIN!');
-
-    const amount = BigInt(txData.amount);
-    const fee    = BigInt(txData.fee);
-    const nonce  = BigInt(txData.nonce);
-    if (amount <= 0n || fee < 0n) throw new Error('[Node Reject] Nilai amount atau fee di luar batas wajar.');
-
-    if (txData.sender !== publicKey) throw new Error('[Node Reject] Spoofing terdeteksi: Sender tidak sama dengan penandatangan!');
-    if (!this.#stateDB.has(publicKey)) throw new Error('[Node Reject] Akun pengirim tidak terdaftar di jaringan.');
-    const account = this.#stateDB.get(publicKey);
+  async process(signedTx) {
+    const { txData, publicKey, signature } = signedTx;
+    
+    validateTransactionStructure(txData);
+    validateSignatureFormat(signature, publicKey);
+    
+    if (txData.chainId !== this.chainId) throw new Error('Chain ID salah!');
+    if (txData.sender !== publicKey) throw new Error('Spoofing terdeteksi!');
+    
+    const account = this.getAccount(publicKey);
+    if (!account) throw new Error('Akun tidak terdaftar.');
 
     const key = ec.keyFromPublic(publicKey, 'hex');
-    const { txHashHex } = await canonicalizeAndHash(txData);
-    let valid = false;
-    try { valid = key.verify(txHashHex, signature); }
-    catch { throw new Error('[Node Reject] Proses verifikasi kriptografi mengalami kegagalan sistem.'); }
-    if (!valid) throw new Error('[Node Reject] Tanda tangan kriptografi tidak sah!');
+    const txHash = await canonicalizeAndHash(txData);
+    
+    // VERIFIKASI ASLI
+    const isValid = key.verify(txHash, signature);
+    if (!isValid) throw new Error('Tanda tangan kriptografi TIDAK SAH!');
 
-    if (nonce !== account.nonce + 1n) {
-      throw new Error(`[Node Reject] Nonce tidak valid! Diterima: ${nonce}, Diharapkan: ${account.nonce + 1n}`);
-    }
+    const amount = BigInt(txData.amount);
+    const fee = BigInt(txData.fee);
+    const nonce = BigInt(txData.nonce);
 
+    if (nonce !== account.nonce + 1n) throw new Error(`Nonce salah! Harap: ${account.nonce + 1n}`);
     const totalCost = amount + fee;
-    if (account.balance < totalCost) {
-      throw new Error(`[Node Reject] Saldo tidak cukup. Saldo: ${account.balance}, Dibutuhkan: ${totalCost}`);
-    }
+    if (account.bal < totalCost) throw new Error('Saldo tidak cukup.');
 
-    account.balance -= totalCost;
+    // Mutasi State
+    account.bal -= totalCost;
     account.nonce += 1n;
-    this.#totalFeesCollected += fee;
+    this.totalFees += fee;
 
-    if (!this.#stateDB.has(txData.recipient)) this.#stateDB.set(txData.recipient, { balance: 0n, nonce: 0n });
-    this.#stateDB.get(txData.recipient).balance += amount;
+    if (!this.stateDB.has(txData.recipient)) this.stateDB.set(txData.recipient, { bal: 0n, nonce: 0n });
+    this.stateDB.get(txData.recipient).bal += amount;
 
-    return { ok: true, senderBalance: account.balance, nonce: account.nonce, totalFees: this.#totalFeesCollected };
+    return { txHash, senderBal: account.bal, nonce: account.nonce, fees: this.totalFees };
   }
 }
 
 // =============================================================
-// UI GLUE
+// UI GLUE & CONTROLLER
 // =============================================================
 const $ = id => document.getElementById(id);
 const logEl = $('log');
 function log(msg, cls='') {
-  const t = new Date().toLocaleTimeString();
   const div = document.createElement('div');
   div.className = cls;
-  div.textContent = `[${t}] ${msg}`;
+  div.textContent = `> ${msg}`;
   logEl.appendChild(div);
   logEl.scrollTop = logEl.scrollHeight;
 }
 
 let wallet = null;
 let node = null;
+let lastSigned = null;
 
 $('btn-gen').onclick = () => {
   try {
     wallet = Wallet.generate();
-    $('privkey').value = wallet.signingKey.getPrivate('hex').padStart(64, '0');
+    $('privkey').value = wallet.key.getPrivate('hex').padStart(64, '0');
     $('pubkey').value = wallet.publicKey;
-    log(`✅ Wallet baru: ${wallet.publicKey.slice(0,20)}...`, 'ok');
-  } catch (e) { log(`❌ ${e.message}`, 'err'); }
+    log('✅ Keypair asli berhasil di-generate (secp256k1).', 'ok');
+  } catch(e) { log(`❌ ${e.message}`, 'err'); }
 };
 
 $('btn-init').onclick = () => {
-  try {
-    if (!wallet) { log('⚠️ Generate wallet dulu.', 'warn'); return; }
-    node = new VoinNode($('chainId').value);
-    node.setAccountState(wallet.publicKey, '1000', '0');
-    log(`✅ Node ${node.chainId} siap. Akun sender = 1000 VOIN, nonce 0.`, 'ok');
-  } catch (e) { log(`❌ ${e.message}`, 'err'); }
+  if (!wallet) return log('Generate wallet dulu!', 'warn');
+  node = new VoinNode($('chainId').value);
+  node.setAccount(wallet.publicKey, '1000', '0');
+  log(`✅ Node ${node.chainId} siap. Akun didaftarkan (Saldo: 1000, Nonce: 0)`, 'ok');
 };
 
 $('btn-sign').onclick = async () => {
+  if (!wallet) return log('Generate wallet dulu!', 'warn');
   try {
-    if (!wallet) { log('⚠️ Generate wallet dulu.', 'warn'); return; }
-    const txData = {
+    const tx = {
       chainId: $('chainId').value,
       sender: wallet.publicKey,
       recipient: $('recipient').value,
       amount: $('amount').value,
       fee: $('fee').value,
-      nonce: $('nonce').value,
+      nonce: $('nonce').value
     };
-    const signed = await wallet.signTransaction(txData);
-    log(`🖊️ Signed: r=${signed.signature.r.slice(0,12)}... s=${signed.signature.s.slice(0,12)}...`, 'ok');
-    window.__lastSigned = signed;
-  } catch (e) { log(`❌ ${e.message}`, 'err'); }
+    lastSigned = await wallet.signTransaction(tx);
+    log(`🖊️ Signed! Hash: ${lastSigned.txHash.slice(0,16)}...`, 'ok');
+  } catch(e) { log(`❌ Gagal sign: ${e.message}`, 'err'); }
 };
 
 $('btn-send').onclick = async () => {
+  if (!node) return log('Init Node dulu!', 'warn');
+  if (!lastSigned) return log('Lakukan Sign Tx dulu!', 'warn');
   try {
-    if (!node) { log('⚠️ Init node dulu.', 'warn'); return; }
-    if (!window.__lastSigned) { log('⚠️ Sign transaksi dulu.', 'warn'); return; }
-    const res = await node.verifyAndProcessTransaction(window.__lastSigned);
-    log(`✅ Sukses! Saldo sender=${res.senderBalance}, nonce=${res.nonce}, fee=${res.totalFees}`, 'ok');
-    // auto increment nonce input
-    $('nonce').value = String(Number($('nonce').value) + 1);
-  } catch (e) { log(`❌ ${e.message}`, 'err'); }
+    const res = await node.process(lastSigned);
+    log(`✅ Transaksi Valid & Sukses!`, 'ok');
+    log(`   > Sisa Saldo Sender: ${res.senderBal} VOIN`, 'muted');
+    log(`   > Total Fee Node: ${res.fees} VOIN`, 'muted');
+    lastSigned = null; // reset
+    $('nonce').value = Number($('nonce').value) + 1;
+  } catch(e) { log(`❌ REJECTED: ${e.message}`, 'err'); }
 };
 
 $('btn-state').onclick = () => {
-  if (!node || !wallet) { log('⚠️ Init dulu.', 'warn'); return; }
-  const s = node.getAccountState(wallet.publicKey);
-  log(`📊 State sender: balance=${s?.balance ?? 0}, nonce=${s?.nonce ?? 0}`, 'muted');
+  if (!node || !wallet) return log('Init Node dulu!', 'warn');
+  const acc = node.getAccount(wallet.publicKey);
+  log(`📊 STATE: Saldo = ${acc?.bal}, Nonce = ${acc?.nonce}`, 'muted');
 };
-
-$('btn-fees').onclick = () => {
-  if (!node) { log('⚠️ Init dulu.', 'warn'); return; }
-  log(`💰 Total fee terkumpul: ${node.getCollectedFees()} VOIN`, 'muted');
-};
-
-log('Siap. Klik "Generate Key" → isi recipient → "Sign" → "Init Node" → "Kirim".', 'muted');
 </script>
 </body>
 </html>
