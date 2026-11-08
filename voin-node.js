@@ -38,7 +38,6 @@ class VoinNode {
     const account = await db.getAccount(publicKey);
     if (!account) throw new Error('[Node Reject] Akun pengirim tidak terdaftar.');
 
-    // Verifikasi Kriptografi
     const key = ec.keyFromPublic(publicKey, 'hex');
     const { txHash } = canonicalizeAndHash(txData);
     let valid = false;
@@ -46,7 +45,6 @@ class VoinNode {
     catch { throw new Error('[Node Reject] Proses verifikasi kriptografi gagal.'); }
     if (!valid) throw new Error('[Node Reject] Tanda tangan kriptografi tidak sah!');
 
-    // Cek Nonce & Saldo
     const amount = BigInt(txData.amount);
     const fee    = BigInt(txData.fee);
     const nonce  = BigInt(txData.nonce);
@@ -60,7 +58,6 @@ class VoinNode {
       throw new Error(`[Node Reject] Saldo tidak cukup. Saldo: ${account.balance}, Dibutuhkan: ${totalCost}`);
     }
 
-    // Update Database
     await db.saveAccount(publicKey, account.balance - totalCost, account.nonce + 1n);
     this.#totalFeesCollected += fee;
 

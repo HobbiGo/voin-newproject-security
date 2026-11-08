@@ -2,7 +2,6 @@
 const crypto = require('crypto');
 const { ec: EC } = require('elliptic');
 
-// PUSAT KURVA: Hanya buat satu objek kurva untuk seluruh aplikasi
 const ec = new EC('secp256k1');
 
 function sha256(str) {

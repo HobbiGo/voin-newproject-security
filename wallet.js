@@ -37,7 +37,7 @@ class Wallet {
   }
 
   signTransaction(txData, pin) {
-    this.#verifyCredential(pin); // Cek PIN sebelum tanda tangan
+    this.#verifyCredential(pin);
     const { txHash } = canonicalizeAndHash(txData);
     const sig = this.signingKey.sign(txHash, { canonical: true });
     

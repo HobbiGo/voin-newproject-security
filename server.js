@@ -3,6 +3,7 @@
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const VoinNode = require('./voin-node');
 const VoinWallet = require('./wallet');
 const VOINAssistant = require('./ai/assistant');
@@ -14,12 +15,24 @@ app.use(express.json());
 app.use(express.static('./')); 
 
 const node = new VoinNode('voin-mainnet-1');
+const JWT_SECRET = "kunci_rahasia_voin_super_aman_123";
 
 const demoPrivKey = crypto.createHash('sha256').update('rahasia_voin_super_aman').digest('hex');
 const serverWallet = new VoinWallet(demoPrivKey);
-serverWallet.setupSecurity('pin', 'securePin999'); // Daftarkan PIN
-
+serverWallet.setupSecurity('pin', 'securePin999'); 
 const userWallet = serverWallet.publicKey; 
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ success: false, message: "Akses Ditolak: Belum Login." });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ success: false, message: "Sesi Kadaluarsa." });
+    req.user = user;
+    next();
+  });
+}
 
 app.listen(3000, async () => {
   console.log(`🚀 VOIN WEB4 DASHBOARD & API berjalan di http://localhost:3000`);
@@ -29,12 +42,19 @@ app.listen(3000, async () => {
   const existingAccount = await node.getAccountState(userWallet);
   if (!existingAccount) {
     await node.setAccountState(userWallet, '1500', '5');
-    console.log('✅ Akun simulasi berhasil didaftarkan ke Database (Saldo: 1500).');
-  } else {
-    console.log('✅ Akun simulasi ditemukan di Database (Data tersimpan permanen).');
+    console.log('✅ Akun simulasi didaftarkan (Saldo: 1500).');
   }
 
   const ai = new VOINAssistant(node);
+
+  app.post('/api/login', (req, res) => {
+    const { pin } = req.body;
+    if (pin !== 'securePin999') {
+      return res.status(401).json({ success: false, message: "PIN Salah!" });
+    }
+    const token = jwt.sign({ wallet: userWallet }, JWT_SECRET, { expiresIn: '1h' });
+    res.json({ success: true, token: token });
+  });
 
   app.post('/api/chat', async (req, res) => {
     try {
@@ -45,7 +65,7 @@ app.listen(3000, async () => {
     }
   });
 
-  app.get('/api/balance', async (req, res) => {
+  app.get('/api/balance', authenticateToken, async (req, res) => {
     try {
       const account = await node.getAccountState(userWallet);
       if (account) {
@@ -58,11 +78,9 @@ app.listen(3000, async () => {
     }
   });
 
-  app.post('/api/transfer', async (req, res) => {
+  app.post('/api/transfer', authenticateToken, async (req, res) => {
     try {
-      const { recipient, amount, fee, nonce, pin } = req.body;
-      if (pin !== 'securePin999') return res.status(401).json({ success: false, message: "PIN Salah!" });
-
+      const { recipient, amount, fee, nonce } = req.body;
       const txData = {
         chainId: 'voin-mainnet-1',
         sender: userWallet,
@@ -72,7 +90,7 @@ app.listen(3000, async () => {
         nonce: nonce.toString()
       };
 
-      const signedTx = serverWallet.signTransaction(txData, pin);
+      const signedTx = serverWallet.signTransaction(txData, 'securePin999');
       await node.verifyAndProcessTransaction(signedTx);
 
       res.json({ success: true, message: "Transaksi Berhasil!" });

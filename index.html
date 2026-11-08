@@ -3,41 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VOIN Web4 Dashboard</title>
+<title>VOIN Web4 Dashboard (JWT Security)</title>
 <style>
   :root { --bg:#0b1020; --card:#111a2e; --fg:#e6edf3; --acc:#4ade80; --border:#1f2a44; --muted:#94a3b8; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background-color: var(--bg); color: var(--fg); font-family: ui-monospace, monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
   
-  /* --- LAYAR LOGIN --- */
   .login-container { display: flex; flex-direction: column; align-items: center; background: var(--card); padding: 40px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 100%; max-width: 400px; }
   .login-container h1 { color: var(--acc); margin-bottom: 10px; font-size: 24px; }
   .login-container p { color: var(--muted); font-size: 12px; margin-bottom: 20px; text-align: center; }
   .login-container input { width: 100%; padding: 15px; background: var(--bg); border: 1px solid var(--border); color: #fff; border-radius: 6px; margin-bottom: 15px; text-align: center; letter-spacing: 5px; font-size: 18px; }
   .login-container button { width: 100%; padding: 15px; background: var(--acc); color: #000; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px; }
   
-  /* --- DASHBOARD (Disembunyikan dulu) --- */
   .dashboard { width: 100%; max-width: 800px; display: none; padding: 20px; }
   .header { text-align: center; margin-bottom: 30px; }
   .header h1 { color: var(--acc); font-size: 24px; margin-bottom: 5px; }
   .header p { color: var(--muted); font-size: 12px; }
-
   .balance-card { background: linear-gradient(135deg, #111a2e, #1a243b); border: 1px solid var(--border); padding: 25px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
   .balance-info h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
   .balance-info h2 { font-size: 36px; color: #fff; }
   .balance-info span { color: var(--acc); font-size: 18px; }
   .nonce-info { text-align: right; font-size: 12px; color: var(--muted); }
   .nonce-info strong { color: #fff; display: block; font-size: 16px; margin-top: 5px; }
-
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
   @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
   .card h3 { font-size: 14px; margin-bottom: 15px; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-
   input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: #fff; padding: 12px; border-radius: 6px; margin-bottom: 10px; font-family: inherit; }
   button { width: 100%; background: var(--acc); color: #000; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; }
   .btn-logout { background: #f87171; color: #fff; margin-top: 20px; }
-  
   .chat-box { height: 200px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 10px; font-size: 12px; }
   .msg-user { color: var(--muted); text-align: right; margin-bottom: 8px; }
   .msg-ai { color: var(--acc); margin-bottom: 8px; }
@@ -45,21 +39,18 @@
 </head>
 <body>
 
-<!-- ================= LAYAR LOGIN ================= -->
 <div class="login-container" id="loginScreen">
   <h1>🔐 VOIN SECURITY</h1>
-  <p>Masukkan PIN Anda untuk mengakses Web4 Dashboard</p>
+  <p>Masukkan PIN untuk mendapatkan akses (JWT)</p>
   <input type="password" id="loginPin" placeholder="******" maxlength="12" onkeypress="if(event.key==='Enter') login()">
   <button onclick="login()">Buka Dashboard</button>
 </div>
 
-<!-- ================= DASHBOARD ================= -->
 <div class="dashboard" id="dashboardScreen">
   <div class="header">
     <h1>🌐 VOIN WEB4 DASHBOARD</h1>
-    <p>Terhubung ke VOIN CORE & AI ENGINE</p>
+    <p>Status: Terautentikasi via JWT Token</p>
   </div>
-
   <div class="balance-card">
     <div class="balance-info">
       <h3>Total Saldo Dompet</h3>
@@ -71,7 +62,6 @@
       Nonce: <span id="nonceTampil">-</span>
     </div>
   </div>
-
   <div class="grid">
     <div class="card">
       <h3>💸 Transfer VOIN</h3>
@@ -82,7 +72,6 @@
       <button onclick="kirimTransfer()">Kirim Transaksi</button>
       <button class="btn-logout" onclick="logout()">Keluar (Logout)</button>
     </div>
-
     <div class="card">
       <h3>🧠 VOIN AI Assistant</h3>
       <div class="chat-box" id="chatBox">
@@ -96,50 +85,70 @@
 
 <script>
   var apiBase = window.location.origin;
-  var sessionPin = ""; // Menyimpan PIN selama sesi login
+  // Ambil token dari memory session browser
+  var authToken = sessionStorage.getItem('voin_token');
 
-  // 1. Fungsi Login
+  // 1. Fungsi Login (Minta Token ke Server)
   async function login() {
     var pin = document.getElementById("loginPin").value;
     if (!pin) return alert("Masukkan PIN!");
 
-    // Validasi PIN ke server (Simulasi: Hanya 'securePin999' yang valid)
-    if (pin === 'securePin999') {
-      sessionPin = pin;
-      document.getElementById("loginScreen").style.display = "none";
-      document.getElementById("dashboardScreen").style.display = "block";
-      muatSaldo();
-    } else {
-      alert("❌ Akses Ditolak: PIN Salah!");
+    try {
+      const response = await fetch(apiBase + '/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pin })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        authToken = data.token;
+        sessionStorage.setItem('voin_token', authToken); // Simpan token di browser
+        document.getElementById("loginScreen").style.display = "none";
+        document.getElementById("dashboardScreen").style.display = "block";
+        muatSaldo();
+      } else {
+        alert("❌ " + data.message);
+      }
+    } catch (e) {
+      alert("Gagal terhubung ke server.");
     }
   }
 
-  // 2. Fungsi Logout
+  // 2. Fungsi Logout (Hapus Token)
   function logout() {
-    sessionPin = "";
+    authToken = null;
+    sessionStorage.removeItem('voin_token');
     document.getElementById("loginPin").value = "";
     document.getElementById("dashboardScreen").style.display = "none";
     document.getElementById("loginScreen").style.display = "flex";
   }
 
-  // 3. Muat Saldo
+  // 3. Muat Saldo (Kirim Token di Header)
   async function muatSaldo() {
-    if (!sessionPin) return;
+    if (!authToken) return;
     try {
-      const response = await fetch(apiBase + '/api/balance');
+      const response = await fetch(apiBase + '/api/balance', {
+        headers: { 'Authorization': 'Bearer ' + authToken }
+      });
       const data = await response.json();
       if (data.success) {
         document.getElementById('saldoTampil').innerHTML = data.balance + ' <span>VOIN</span>';
         document.getElementById('nonceTampil').innerText = data.nonce;
         document.getElementById('nonceInput').value = Number(data.nonce) + 1;
+      } else {
+        logout(); // Jika token invalid, tendang ke login
       }
     } catch (e) {
       document.getElementById('saldoTampil').innerText = "Error Koneksi";
     }
   }
 
-  // 4. Kirim Transfer (PIN Otomatis dari Sesi)
+  // 4. Kirim Transfer (Kirim Token di Header)
   async function kirimTransfer() {
+    if (!authToken) return logout();
+
     var recipient = document.getElementById("recipient").value;
     var amount = document.getElementById("amount").value;
     var fee = document.getElementById("fee").value;
@@ -150,14 +159,17 @@
     try {
       const response = await fetch(apiBase + '/api/transfer', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipient, amount, fee, nonce, pin: sessionPin })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + authToken
+        },
+        body: JSON.stringify({ recipient, amount, fee, nonce })
       });
       
       const data = await response.json();
       if (data.success) {
         alert("✅ " + data.message);
-        muatSaldo(); // Refresh saldo otomatis setelah transfer
+        muatSaldo();
       } else {
         alert("❌ Gagal: " + data.message);
       }
@@ -189,6 +201,13 @@
     } catch (e) {
       chatBox.innerHTML += "<div class='msg-ai' style='color:red;'>[Error]: Koneksi terputus.</div>";
     }
+  }
+
+  // Cek apakah user sudah punya token saat halaman dibuka
+  if (authToken) {
+    document.getElementById("loginScreen").style.display = "none";
+    document.getElementById("dashboardScreen").style.display = "block";
+    muatSaldo();
   }
 </script>
 
