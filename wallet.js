@@ -1,7 +1,5 @@
 'use strict';
-const { ec: EC } = require('elliptic');
-const ec = new EC('secp256k1');
-const { canonicalizeAndHash, sha256 } = require('./crypto-utils');
+const { canonicalizeAndHash, sha256, ec } = require('./crypto-utils');
 
 class Wallet {
   #isPinSet;

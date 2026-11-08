@@ -1,12 +1,14 @@
 'use strict';
 const crypto = require('crypto');
+const { ec: EC } = require('elliptic');
 
-// Fungsi Hash SHA-256 untuk PIN
+// PUSAT KURVA: Hanya buat satu objek kurva untuk seluruh aplikasi
+const ec = new EC('secp256k1');
+
 function sha256(str) {
   return crypto.createHash('sha256').update(str, 'utf8').digest('hex');
 }
 
-// Fungsi Hash Transaksi (Kanonikalisasi)
 function canonicalizeAndHash(txData) {
   if (!txData || typeof txData !== 'object' || Array.isArray(txData)) {
     throw new Error('[Crypto] txData harus berupa objek non-array.');
@@ -19,4 +21,4 @@ function canonicalizeAndHash(txData) {
   return { txHash, canonicalString };
 }
 
-module.exports = { canonicalizeAndHash, sha256 };
+module.exports = { canonicalizeAndHash, sha256, ec };
