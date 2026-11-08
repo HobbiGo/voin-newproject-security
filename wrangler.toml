@@ -1,4 +1,0 @@
-name = "voin-web4-dashboard"
-main = "server.js"
-compatibility_date = "2026-08-04"
-compatibility_flags = ["nodejs_compat"]
