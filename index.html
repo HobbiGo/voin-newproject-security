@@ -2,71 +2,144 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>VOIN AI ENGINE V1.0</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOIN Web4 Dashboard</title>
 <style>
-  body { background-color: #0b1020; color: white; font-family: monospace; padding: 20px; display: flex; justify-content: center; }
-  .box { width: 100%; max-width: 500px; background: #111a2e; padding: 20px; border-radius: 10px; border: 1px solid #1f2a44; }
-  .chat { height: 300px; border: 1px solid #1f2a44; padding: 10px; overflow-y: auto; margin-bottom: 10px; background: #0b1020; border-radius: 5px; }
-  .msg-ai { color: #4ade80; margin-bottom: 10px; }
-  .msg-user { color: #e6edf3; text-align: right; margin-bottom: 10px; }
-  .input-area { display: flex; gap: 10px; }
-  input { flex: 1; padding: 10px; background: #0b1020; color: white; border: 1px solid #1f2a44; border-radius: 5px; }
-  button { padding: 10px 20px; background: #4ade80; color: black; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; }
+  :root { --bg:#0b1020; --card:#111a2e; --fg:#e6edf3; --acc:#4ade80; --border:#1f2a44; --muted:#94a3b8; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background-color: var(--bg); color: var(--fg); font-family: ui-monospace, monospace; padding: 20px; display: flex; justify-content: center; }
+  .dashboard { width: 100%; max-width: 800px; }
+  
+  /* Header */
+  .header { text-align: center; margin-bottom: 30px; }
+  .header h1 { color: var(--acc); font-size: 24px; margin-bottom: 5px; }
+  .header p { color: var(--muted); font-size: 12px; }
+
+  /* Kartu Saldo */
+  .balance-card { background: linear-gradient(135deg, #111a2e, #1a243b); border: 1px solid var(--border); padding: 25px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); display: flex; justify-content: space-between; align-items: center; }
+  .balance-info h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  .balance-info h2 { font-size: 36px; color: #fff; }
+  .balance-info span { color: var(--acc); font-size: 18px; }
+  .nonce-info { text-align: right; font-size: 12px; color: var(--muted); }
+  .nonce-info strong { color: #fff; display: block; font-size: 16px; margin-top: 5px; }
+
+  /* Grid untuk Transaksi & AI */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  
+  /* Kotak Umum */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card h3 { font-size: 14px; margin-bottom: 15px; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+
+  /* Form Transfer */
+  input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: #fff; padding: 12px; border-radius: 6px; margin-bottom: 10px; font-family: inherit; }
+  button { width: 100%; background: var(--acc); color: #000; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+  button:hover { opacity: 0.8; }
+
+  /* Kotak Chat AI */
+  .chat-box { height: 200px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 10px; font-size: 12px; }
+  .msg-user { color: var(--muted); text-align: right; margin-bottom: 8px; }
+  .msg-ai { color: var(--acc); margin-bottom: 8px; }
 </style>
 </head>
 <body>
 
-<div class="box">
-  <h3>🧠 VOIN AI ENGINE V1.0 (Terhubung ke Node.js)</h3>
-  <div class="chat" id="chatBox">
-    <div class="msg-ai">[AI]: Halo! Saya terhubung ke API VOIN. Ketik "saldo", "keamanan", atau "kirim".</div>
+<div class="dashboard">
+  <div class="header">
+    <h1>🌐 VOIN WEB4 DASHBOARD</h1>
+    <p>Terhubung ke VOIN CORE & AI ENGINE</p>
   </div>
-  <div class="input-area">
-    <input type="text" id="inputUser" placeholder="Ketik pesan...">
-    <button onclick="kirimPesan()">Kirim</button>
+
+  <!-- Kartu Saldo -->
+  <div class="balance-card">
+    <div class="balance-info">
+      <h3>Total Saldo Dompet</h3>
+      <h2 id="saldoTampil">Memuat...</h2>
+    </div>
+    <div class="nonce-info">
+      Status Jaringan<br>
+      <strong>● AKTIF</strong>
+      Nonce: <span id="nonceTampil">-</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Kolom Kiri: Transfer -->
+    <div class="card">
+      <h3>💸 Transfer VOIN</h3>
+      <input type="text" id="recipient" placeholder="Alamat Penerima (Recipient)">
+      <input type="number" id="amount" placeholder="Jumlah (Amount)" value="100">
+      <input type="number" id="fee" placeholder="Biaya (Fee)" value="1">
+      <input type="number" id="nonceInput" placeholder="Nonce" value="6">
+      <button onclick="kirimTransfer()">Kirim Transaksi</button>
+    </div>
+
+    <!-- Kolom Kanan: AI Assistant -->
+    <div class="card">
+      <h3>🧠 VOIN AI Assistant</h3>
+      <div class="chat-box" id="chatBox">
+        <div class="msg-ai">[AI]: Halo! Saya siap membantu. Anda bisa bertanya tentang saldo atau keamanan.</div>
+      </div>
+      <input type="text" id="chatInput" placeholder="Tanya AI..." onkeypress="if(event.key==='Enter') kirimChat()">
+      <button onclick="kirimChat()" style="background: #1f2a44; color: #fff;">Kirim Pesan AI</button>
+    </div>
   </div>
 </div>
 
 <script>
-  async function kirimPesan() {
-    var input = document.getElementById("inputUser");
+  // Konfigurasi URL API Codespaces
+  var host = window.location.host;
+  var apiBase = "https://" + host.replace(/-33079\./, '-3000.');
+
+  // 1. Ambil Saldo dari API Node.js
+  async function muatSaldo() {
+    try {
+      const response = await fetch(apiBase + '/api/balance');
+      const data = await response.json();
+      if (data.success) {
+        document.getElementById('saldoTampil').innerHTML = data.balance + ' <span>VOIN</span>';
+        document.getElementById('nonceTampil').innerText = data.nonce;
+        
+        // Sinkronisasi input nonce otomatis (nonce + 1)
+        document.getElementById('nonceInput').value = Number(data.nonce) + 1;
+      }
+    } catch (e) {
+      document.getElementById('saldoTampil').innerText = "Error Koneksi";
+    }
+  }
+
+  // 2. Fungsi Chat AI
+  async function kirimChat() {
+    var input = document.getElementById("chatInput");
     var chatBox = document.getElementById("chatBox");
     var teks = input.value;
-
     if (teks === "") return;
 
-    // Tampilkan pesan user
     chatBox.innerHTML += "<div class='msg-user'>[User]: " + teks + "</div>";
     input.value = "";
-
-    // Tampilkan status loading
-    var loadingId = "loading-" + Date.now();
-    chatBox.innerHTML += "<div class='msg-ai' id='" + loadingId + "'>[AI]: Sedang menganalisis...</div>";
     chatBox.scrollTop = chatBox.scrollHeight;
 
     try {
-      // TRIK CODESPACES: Mengubah localhost menjadi URL Codespaces secara otomatis
-      var host = window.location.host;
-      var apiUrl = "https://" + host.replace(/-33079\./, '-3000.') + "/api/chat";
-
-      const response = await fetch(apiUrl, {
+      const response = await fetch(apiBase + '/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: teks })
       });
-      
       const data = await response.json();
-      
-      // Hapus teks loading dan ganti dengan balasan asli
-      document.getElementById(loadingId).remove();
       chatBox.innerHTML += "<div class='msg-ai'>" + data.reply + "</div>";
       chatBox.scrollTop = chatBox.scrollHeight;
-
-    } catch (error) {
-      document.getElementById(loadingId).remove();
-      chatBox.innerHTML += "<div class='msg-ai' style='color:red;'>[Error]: Gagal terhubung ke server Node.js. Pastikan server menyala.</div>";
+    } catch (e) {
+      chatBox.innerHTML += "<div class='msg-ai' style='color:red;'>[Error]: Koneksi terputus.</div>";
     }
   }
+
+  // 3. Fungsi Transfer (Sementara hanya notifikasi)
+  function kirimTransfer() {
+    alert("Fitur pengiriman transaksi (Opsi 3) akan dihubungkan ke Wallet.js pada langkah selanjutnya!");
+  }
+
+  // Muat saldo saat halaman dibuka
+  muatSaldo();
 </script>
 
 </body>

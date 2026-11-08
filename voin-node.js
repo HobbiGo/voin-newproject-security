@@ -1,9 +1,9 @@
 'use strict';
 const { ec, canonicalizeAndHash } = require('./crypto-utils');
 const { validateTransactionStructure, validateSignatureFormat } = require('./validator');
+const db = require('./database'); // Harus ada './database'
 
 class VoinNode {
-  #stateDB = new Map();
   #totalFeesCollected = 0n;
 
   constructor(chainId = 'voin-mainnet-1') {
@@ -11,18 +11,17 @@ class VoinNode {
     this.chainId = chainId;
   }
 
-  setAccountState(publicKey, balance, nonce) {
-    this.#stateDB.set(publicKey, { balance: BigInt(balance), nonce: BigInt(nonce) });
+  async setAccountState(publicKey, balance, nonce) {
+    await db.saveAccount(publicKey, balance, nonce);
   }
 
-  getAccountState(publicKey) {
-    const s = this.#stateDB.get(publicKey);
-    return s ? { balance: s.balance, nonce: s.nonce } : undefined;
+  async getAccountState(publicKey) {
+    return await db.getAccount(publicKey);
   }
 
   getCollectedFees() { return this.#totalFeesCollected; }
 
-  verifyAndProcessTransaction(signedTransaction) {
+  async verifyAndProcessTransaction(signedTransaction) {
     if (!signedTransaction || typeof signedTransaction !== 'object' || Array.isArray(signedTransaction)) {
       throw new Error('[Node Reject] Paket transaksi kosong atau tidak valid.');
     }
@@ -36,8 +35,8 @@ class VoinNode {
     if (txData.chainId !== this.chainId) throw new Error('[Node Reject] Chain ID tidak cocok!');
     if (txData.sender !== publicKey) throw new Error('[Node Reject] Spoofing terdeteksi!');
     
-    if (!this.#stateDB.has(publicKey)) throw new Error('[Node Reject] Akun pengirim tidak terdaftar.');
-    const account = this.#stateDB.get(publicKey);
+    const account = await db.getAccount(publicKey);
+    if (!account) throw new Error('[Node Reject] Akun pengirim tidak terdaftar.');
 
     const key = ec.keyFromPublic(publicKey, 'hex');
     const { txHash } = canonicalizeAndHash(txData);
@@ -59,12 +58,12 @@ class VoinNode {
       throw new Error(`[Node Reject] Saldo tidak cukup. Saldo: ${account.balance}, Dibutuhkan: ${totalCost}`);
     }
 
-    account.balance -= totalCost;
-    account.nonce += 1n;
+    await db.saveAccount(publicKey, account.balance - totalCost, account.nonce + 1n);
     this.#totalFeesCollected += fee;
 
-    if (!this.#stateDB.has(txData.recipient)) this.#stateDB.set(txData.recipient, { balance: 0n, nonce: 0n });
-    this.#stateDB.get(txData.recipient).balance += amount;
+    let recipientAccount = await db.getAccount(txData.recipient);
+    if (!recipientAccount) recipientAccount = { balance: 0n, nonce: 0n };
+    await db.saveAccount(txData.recipient, recipientAccount.balance + amount, recipientAccount.nonce);
 
     return true;
   }
