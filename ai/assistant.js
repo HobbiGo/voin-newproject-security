@@ -25,20 +25,17 @@ class VOINAssistant {
       return `[AI]: Saldo Anda: ${report.saldo} (Nonce: ${report.nonce}). Status: ${report.status}.`;
     }
 
-    // 2. Opsi 1 & 3: Analisis Transaksi & Prediksi (Jika user menyebut angka)
+    // 2. Analisis Transaksi & Prediksi
     if (lowerPrompt.includes("kirim") || lowerPrompt.includes("transfer") || lowerPrompt.includes("aman")) {
-      // Ekstrak angka dari teks user (misal: "kirim 100 voin")
       const match = userPrompt.match(/\d+/);
-      const amount = match ? match[0] : "100"; // Default 100 jika tidak ada angka
+      const amount = match ? match[0] : "100"; 
       
       const account = await this.node.getAccountState(walletPublicKey);
       if (!account) return `[AI]: Akun Anda tidak ditemukan di database.`;
 
       const fee = "1";
       
-      // Analisis Pembayaran
       const payAnalysis = this.paymentIntel.analyzePayment(amount, fee, account.balance);
-      // Prediksi Saldo
       const prediction = this.predictiveIntel.predictBalance(account.balance, amount, fee);
 
       let response = `[AI]: Analisis untuk pengiriman ${amount} VOIN:\n`;
