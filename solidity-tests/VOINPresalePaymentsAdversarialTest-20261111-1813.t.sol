@@ -101,7 +101,7 @@ contract VOINPresalePaymentsAdversarialTest {
         require(sale.allocations(address(receiver)) == 100 * UNIT, "Exact payment failed");
     }
 
-    function testFailedTreasuryWithdrawalPreservesFunds() public {
+    function testTreasuryWithdrawalFailurePreservesFunds() public {
         VoinRejectingTreasury rejecting = new VoinRejectingTreasury();
         VOINPresalePaymentsDraft other = deploy(payable(address(rejecting)));
         other.setPaused(false);
