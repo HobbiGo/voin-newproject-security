@@ -1,169 +1,140 @@
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+name: VOIN Solidity Security Tests
 
-// FORK TEST DRAFT: not yet compiled or executed.
-// Upload directly inside solidity-tests, beside the other payment test files.
-// This file sends NO signed transactions to any network.
-// Fork state changes (including storage funding) exist only in the local EVM.
-// Requires archival RPC access at the pinned block. No private keys required.
-import {VOINPresalePaymentsDraft, IVoinUsdFeed} from "./src/VOINPresalePaymentsDraft-20261111-1733.sol";
+on:
+  workflow_dispatch:
 
-interface VmVoinFork {
-    function createSelectFork(string calldata url, uint256 blockNumber) external returns (uint256);
-    function envOr(string calldata name, string calldata defaultValue) external returns (string memory);
-    function deal(address account, uint256 balance) external;
-    function load(address target, bytes32 slot) external view returns (bytes32);
-    function store(address target, bytes32 slot, bytes32 value) external;
-    function expectRevert() external;
-}
+permissions:
+  contents: read
 
-interface IVoinForkToken {
-    function decimals() external view returns (uint8);
-    function balanceOf(address account) external view returns (uint256);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function approve(address spender, uint256 amount) external returns (bool);
-}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
-contract VOINPresalePaymentsForkTest {
-    VmVoinFork private constant vm = VmVoinFork(address(uint160(uint256(keccak256("hevm cheat code")))));
-    uint256 private constant PINNED_BLOCK = 132960716;
-    uint256 private constant PINNED_TIMESTAMP = 1794396699;
-    address private constant USDT = address(bytes20(hex"55d398326f99059ff775485246999027b3197955"));
-    address private constant BNB_USD = address(bytes20(hex"0567f2323251f0aab15c8dfb1967e4e8a7d42aee"));
-    address private constant USDT_USD = address(bytes20(hex"b97ad0e74fa7d920791e90258a6e2085088b4320"));
-    address payable private constant LOCAL_TREASURY = payable(address(0xBEEF));
-    uint256 private constant UNIT = 1e18;
-    VOINPresalePaymentsDraft private sale;
-    IVoinForkToken private token;
+    defaults:
+      run:
+        shell: bash
+        working-directory: solidity-tests
 
-    receive() external payable {}
+    env:
+      FOUNDRY_OPTIMIZER: "true"
+      FOUNDRY_OPTIMIZER_RUNS: "200"
+      FOUNDRY_VIA_IR: "true"
+      FOUNDRY_FUZZ_RUNS: "256"
+      BSC_RPC_URL: "https://bsc-rpc.publicnode.com"
 
-    function setUp() public {
-        string memory rpc = vm.envOr("BSC_RPC_URL", string("https://bsc-rpc.publicnode.com"));
-        vm.createSelectFork(rpc, PINNED_BLOCK);
-        require(block.chainid == 56, "Fork must be BNB mainnet");
-        require(block.number == PINNED_BLOCK, "Unexpected block");
-        require(block.timestamp == PINNED_TIMESTAMP, "Unexpected timestamp");
-        require(USDT.code.length > 0 && BNB_USD.code.length > 0 && USDT_USD.code.length > 0, "Missing fork code");
-        token = IVoinForkToken(USDT);
-        require(token.decimals() == 18, "Unexpected USDT precision");
-        require(IVoinUsdFeed(BNB_USD).decimals() == 8, "Unexpected BNB feed precision");
-        require(IVoinUsdFeed(USDT_USD).decimals() == 8, "Unexpected USDT feed precision");
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-        // FIXTURE ONLY: sufficient age allowance for this exact historical block.
-        // These values and 0.95/1.05 bounds are NOT production recommendations.
-        uint256 bnbAge = checkedAge(BNB_USD);
-        uint256 usdtAge = checkedAge(USDT_USD);
-        sale = new VOINPresalePaymentsDraft(
-            56, address(this), LOCAL_TREASURY, USDT, BNB_USD, USDT_USD,
-            bnbAge + 1, usdtAge + 1, 95e16, 105e16
-        );
-        vm.deal(address(this), 10 ether);
-    }
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
 
-    function checkedAge(address feed) private view returns (uint256) {
-        (, int256 answer,, uint256 updatedAt,) = IVoinUsdFeed(feed).latestRoundData();
-        require(answer > 0, "Nonpositive real feed answer");
-        require(updatedAt > 0 && updatedAt <= block.timestamp, "Invalid real feed timestamp");
-        return block.timestamp - updatedAt;
-    }
+      - name: Show tool version
+        run: forge --version
 
-    function feedPrice18(address feed) private view returns (uint256) {
-        (, int256 answer,,,) = IVoinUsdFeed(feed).latestRoundData();
-        require(answer > 0, "Invalid price");
-        return uint256(answer) * 1e10;
-    }
+      - name: Install OpenZeppelin v5.0.2 contracts only
+        run: |
+          mkdir -p lib
 
-    function ceilDiv(uint256 numerator, uint256 denominator) private pure returns (uint256) {
-        return numerator / denominator + (numerator % denominator == 0 ? 0 : 1);
-    }
+          git clone \
+            --depth 1 \
+            --branch v5.0.2 \
+            https://github.com/OpenZeppelin/openzeppelin-contracts.git \
+            lib/openzeppelin-contracts
 
-    // Deliberately synthetic funding, NOT an actual transfer or proof of reserves.
-    // Locate the token balance mapping by probing local storage. Each unsuccessful
-    // write is restored immediately. Keep the real token executable code intact.
-    function fundLocalUsdt(uint256 amount) private {
-        require(token.balanceOf(address(this)) == 0, "Unexpected fixture balance");
-        for (uint256 slot = 0; slot < 32; slot++) {
-            bytes32 key = keccak256(abi.encode(address(this), slot));
-            bytes32 beforeValue = vm.load(USDT, key);
-            vm.store(USDT, key, bytes32(amount));
-            if (token.balanceOf(address(this)) == amount) return;
-            vm.store(USDT, key, beforeValue);
-        }
-        revert("Unable to locate balance mapping; inspect token layout");
-    }
+          git -C lib/openzeppelin-contracts \
+            sparse-checkout init --cone
 
-    function testForkStartsPausedWithExpectedDependencies() public view {
-        require(sale.paused(), "Must start paused");
-        require(address(sale.usdt()) == USDT, "Wrong token");
-        require(address(sale.bnbUsdFeed()) == BNB_USD, "Wrong BNB feed");
-        require(address(sale.usdtUsdFeed()) == USDT_USD, "Wrong USDT feed");
-        require(sale.usdtScale() == UNIT, "Wrong token scale");
-    }
+          git -C lib/openzeppelin-contracts \
+            sparse-checkout set contracts
 
-    function testForkQuotesMatchRealFeedAnswers() public view {
-        uint256 amount = 100 * UNIT;
-        (uint256 bnbCost, uint256 bnbUsdCost) = sale.quoteBnb(amount);
-        (uint256 usdtCost, uint256 usdtUsdCost) = sale.quoteUsdt(amount);
-        require(bnbUsdCost == UNIT && usdtUsdCost == UNIT, "Wrong batch-one USD cost");
-        require(bnbCost == ceilDiv(UNIT * UNIT, feedPrice18(BNB_USD)), "BNB quote mismatch");
-        require(usdtCost == ceilDiv(UNIT * UNIT, feedPrice18(USDT_USD)), "USDT quote mismatch");
-    }
+          git -C lib/openzeppelin-contracts rev-parse HEAD
 
-    function testForkLocalBnbPurchaseRefundAndTreasuryWithdrawal() public {
-        sale.setPaused(false);
-        (uint256 cost,) = sale.quoteBnb(100 * UNIT);
-        uint256 beforeBuyer = address(this).balance;
-        uint256 beforeTreasury = LOCAL_TREASURY.balance;
-        sale.buyWithBnb{value: cost + 1 ether}(100 * UNIT, cost, block.timestamp + 60);
-        require(address(this).balance == beforeBuyer - cost, "Incorrect refund");
-        require(address(sale).balance == cost && sale.totalBnbPaid() == cost, "BNB mismatch");
-        require(sale.allocations(address(this)) == 100 * UNIT, "Allocation mismatch");
-        sale.withdrawBnb(cost);
-        require(address(sale).balance == 0, "BNB withdrawal incomplete");
-        require(LOCAL_TREASURY.balance == beforeTreasury + cost, "Treasury mismatch");
-    }
+      - name: Configure OpenZeppelin import mapping
+        run: |
+          touch remappings.txt
 
-    function testForkRealUsdtCodeApprovalPurchaseAndWithdrawal() public {
-        sale.setPaused(false);
-        (uint256 cost,) = sale.quoteUsdt(100 * UNIT);
-        fundLocalUsdt(cost + UNIT);
-        require(token.approve(address(sale), cost), "Approve failed");
-        require(token.allowance(address(this), address(sale)) == cost, "Wrong allowance");
-        uint256 beforeSale = token.balanceOf(address(sale));
-        uint256 beforeTreasury = token.balanceOf(LOCAL_TREASURY);
-        sale.buyWithUsdt(100 * UNIT, cost, block.timestamp + 60);
-        require(token.balanceOf(address(this)) == UNIT, "Wrong buyer debit");
-        require(token.balanceOf(address(sale)) == beforeSale + cost, "Wrong sale credit");
-        require(sale.totalUsdtPaid() == cost, "Wrong payment counter");
-        require(sale.allocations(address(this)) == 100 * UNIT, "Wrong allocation");
-        sale.withdrawUsdt(cost);
-        require(token.balanceOf(address(sale)) == beforeSale, "USDT withdrawal incomplete");
-        require(token.balanceOf(LOCAL_TREASURY) == beforeTreasury + cost, "Wrong treasury credit");
-    }
+          printf '\n@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\n' \
+            >> remappings.txt
 
-    function testForkMissingAllowanceRevertsAndRollsBack() public {
-        sale.setPaused(false);
-        (uint256 cost,) = sale.quoteUsdt(100 * UNIT);
-        fundLocalUsdt(cost);
-        require(token.approve(address(sale), 0), "Allowance reset failed");
-        vm.expectRevert();
-        sale.buyWithUsdt(100 * UNIT, cost, block.timestamp + 60);
-        require(sale.totalAllocated() == 0 && sale.totalUsdtPaid() == 0, "Counters changed");
-        require(token.balanceOf(address(this)) == cost, "Buyer lost tokens");
-        require(token.balanceOf(address(sale)) == 0, "Sale retained tokens");
-    }
+      - name: Compile contracts and tests
+        run: forge build
 
-    function testForkMixedPaymentAllocationsStayConsistent() public {
-        sale.setPaused(false);
-        (uint256 bnbCost,) = sale.quoteBnb(100 * UNIT);
-        sale.buyWithBnb{value: bnbCost}(100 * UNIT, bnbCost, block.timestamp + 60);
-        (uint256 tokenCost,) = sale.quoteUsdt(200 * UNIT);
-        fundLocalUsdt(tokenCost);
-        require(token.approve(address(sale), tokenCost), "Approve failed");
-        sale.buyWithUsdt(200 * UNIT, tokenCost, block.timestamp + 60);
-        require(sale.totalAllocated() == 300 * UNIT, "Global allocation mismatch");
-        require(sale.allocations(address(this)) == 300 * UNIT, "Buyer allocation mismatch");
-        require(sale.totalBnbPaid() == bnbCost && sale.totalUsdtPaid() == tokenCost, "Payment totals mismatch");
-    }
-}
+      - name: Verify all four test suites are detected
+        run: |
+          forge test \
+            --list \
+            --match-contract '^VOINPresaleSecurityTest$' \
+            | tee detected-legacy-tests.txt
+
+          grep -q \
+            'testExactPaymentRecordsAllocation' \
+            detected-legacy-tests.txt
+
+          forge test \
+            --list \
+            --match-contract '^VOINPresalePaymentsDraftTest$' \
+            | tee detected-payment-tests.txt
+
+          grep -q \
+            'testBnbExactPaymentAndAllocation' \
+            detected-payment-tests.txt
+
+          grep -q \
+            'testUsdtExactPaymentAndAllocation' \
+            detected-payment-tests.txt
+
+          forge test \
+            --list \
+            --match-contract '^VOINPresalePaymentsAdversarialTest$' \
+            | tee detected-adversarial-tests.txt
+
+          grep -q \
+            'testRefundCallbackCannotReenterPurchase' \
+            detected-adversarial-tests.txt
+
+          grep -q \
+            'testFuzzUsdtDebitAndAllocationConservation' \
+            detected-adversarial-tests.txt
+
+          forge test \
+            --list \
+            --match-contract '^VOINPresalePaymentsForkTest$' \
+            | tee detected-fork-tests.txt
+
+          grep -q \
+            'testForkQuotesMatchRealFeedAnswers' \
+            detected-fork-tests.txt
+
+          grep -q \
+            'testForkRealUsdtCodeApprovalPurchaseAndWithdrawal' \
+            detected-fork-tests.txt
+
+      - name: Run existing isolated EVM tests
+        run: |
+          forge test \
+            --match-contract '^VOINPresaleSecurityTest$' \
+            -vvv
+
+      - name: Run BNB and USDT payment mock tests
+        run: |
+          forge test \
+            --match-contract '^VOINPresalePaymentsDraftTest$' \
+            -vvv
+
+      - name: Run adversarial and fuzz mock tests
+        run: |
+          forge test \
+            --match-contract '^VOINPresalePaymentsAdversarialTest$' \
+            -vvv
+
+      - name: Run pinned-block BNB mainnet fork tests
+        run: |
+          forge test \
+            --match-contract '^VOINPresalePaymentsForkTest$' \
+            -vvv
