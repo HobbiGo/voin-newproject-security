@@ -13,6 +13,7 @@ jobs:
 
     defaults:
       run:
+        shell: bash
         working-directory: solidity-tests
 
     steps:
@@ -32,5 +33,10 @@ jobs:
       - name: Compile test contracts
         run: forge build
 
+      - name: Verify security tests are detected
+        run: |
+          forge test --list --match-contract '^VOINPresaleSecurityTest$' | tee detected-tests.txt
+          grep -q 'testExactPaymentRecordsAllocation' detected-tests.txt
+
       - name: Run isolated EVM tests
-        run: forge test -vvv
+        run: forge test --match-contract '^VOINPresaleSecurityTest$' -vvv
