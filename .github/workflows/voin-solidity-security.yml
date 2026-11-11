@@ -63,19 +63,38 @@ jobs:
       - name: Compile contracts and tests
         run: forge build
 
-      - name: Verify existing security tests are detected
+      - name: Verify both test suites are detected
         run: |
           forge test \
             --list \
             --match-contract '^VOINPresaleSecurityTest$' \
-            | tee detected-tests.txt
+            | tee detected-legacy-tests.txt
 
           grep -q \
             'testExactPaymentRecordsAllocation' \
-            detected-tests.txt
+            detected-legacy-tests.txt
+
+          forge test \
+            --list \
+            --match-contract '^VOINPresalePaymentsDraftTest$' \
+            | tee detected-payment-tests.txt
+
+          grep -q \
+            'testBnbExactPaymentAndAllocation' \
+            detected-payment-tests.txt
+
+          grep -q \
+            'testUsdtExactPaymentAndAllocation' \
+            detected-payment-tests.txt
 
       - name: Run existing isolated EVM tests
         run: |
           forge test \
             --match-contract '^VOINPresaleSecurityTest$' \
+            -vvv
+
+      - name: Run new BNB and USDT mock tests
+        run: |
+          forge test \
+            --match-contract '^VOINPresalePaymentsDraftTest$' \
             -vvv
