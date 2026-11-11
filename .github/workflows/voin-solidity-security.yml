@@ -1,0 +1,36 @@
+name: VOIN Solidity Security Tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: solidity-tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Show tool version
+        run: forge --version
+
+      - name: Compile test contracts
+        run: forge build
+
+      - name: Run isolated EVM tests
+        run: forge test -vvv
