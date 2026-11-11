@@ -9,12 +9,17 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     defaults:
       run:
         shell: bash
         working-directory: solidity-tests
+
+    env:
+      FOUNDRY_OPTIMIZER: "true"
+      FOUNDRY_OPTIMIZER_RUNS: "200"
+      FOUNDRY_VIA_IR: "true"
 
     steps:
       - name: Checkout repository
@@ -30,13 +35,39 @@ jobs:
       - name: Show tool version
         run: forge --version
 
-      - name: Compile test contracts
+      - name: Install OpenZeppelin v5.0.2
+        run: |
+          mkdir -p lib
+          git clone \
+            --depth 1 \
+            --branch v5.0.2 \
+            https://github.com/OpenZeppelin/openzeppelin-contracts.git \
+            lib/openzeppelin-contracts
+
+          git -C lib/openzeppelin-contracts rev-parse HEAD
+
+      - name: Configure OpenZeppelin import mapping
+        run: |
+          touch remappings.txt
+          printf '\n@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\n' \
+            >> remappings.txt
+
+      - name: Compile contracts and tests
         run: forge build
 
-      - name: Verify security tests are detected
+      - name: Verify existing security tests are detected
         run: |
-          forge test --list --match-contract '^VOINPresaleSecurityTest$' | tee detected-tests.txt
-          grep -q 'testExactPaymentRecordsAllocation' detected-tests.txt
+          forge test \
+            --list \
+            --match-contract '^VOINPresaleSecurityTest$' \
+            | tee detected-tests.txt
 
-      - name: Run isolated EVM tests
-        run: forge test --match-contract '^VOINPresaleSecurityTest$' -vvv
+          grep -q \
+            'testExactPaymentRecordsAllocation' \
+            detected-tests.txt
+
+      - name: Run existing isolated EVM tests
+        run: |
+          forge test \
+            --match-contract '^VOINPresaleSecurityTest$' \
+            -vvv
