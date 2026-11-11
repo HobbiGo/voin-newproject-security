@@ -1,0 +1,43 @@
+name: Generate npm lockfile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Use npm 10.9.2
+        run: npm install --global npm@10.9.2
+
+      - name: Generate lockfile in isolated folder
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/voin-lockfile"
+          cp package.json "$RUNNER_TEMP/voin-lockfile/"
+          cd "$RUNNER_TEMP/voin-lockfile"
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: voin-npm-lockfile
+          path: ${{ runner.temp }}/voin-lockfile/package-lock.json
+          if-no-files-found: error
+          retention-days: 7
