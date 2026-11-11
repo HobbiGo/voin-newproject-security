@@ -20,6 +20,7 @@ jobs:
       FOUNDRY_OPTIMIZER: "true"
       FOUNDRY_OPTIMIZER_RUNS: "200"
       FOUNDRY_VIA_IR: "true"
+      FOUNDRY_FUZZ_RUNS: "256"
 
     steps:
       - name: Checkout repository
@@ -63,7 +64,7 @@ jobs:
       - name: Compile contracts and tests
         run: forge build
 
-      - name: Verify both test suites are detected
+      - name: Verify all three test suites are detected
         run: |
           forge test \
             --list \
@@ -87,14 +88,33 @@ jobs:
             'testUsdtExactPaymentAndAllocation' \
             detected-payment-tests.txt
 
+          forge test \
+            --list \
+            --match-contract '^VOINPresalePaymentsAdversarialTest$' \
+            | tee detected-adversarial-tests.txt
+
+          grep -q \
+            'testRefundCallbackCannotReenterPurchase' \
+            detected-adversarial-tests.txt
+
+          grep -q \
+            'testFuzzUsdtDebitAndAllocationConservation' \
+            detected-adversarial-tests.txt
+
       - name: Run existing isolated EVM tests
         run: |
           forge test \
             --match-contract '^VOINPresaleSecurityTest$' \
             -vvv
 
-      - name: Run new BNB and USDT mock tests
+      - name: Run BNB and USDT payment mock tests
         run: |
           forge test \
             --match-contract '^VOINPresalePaymentsDraftTest$' \
+            -vvv
+
+      - name: Run adversarial and fuzz mock tests
+        run: |
+          forge test \
+            --match-contract '^VOINPresalePaymentsAdversarialTest$' \
             -vvv
