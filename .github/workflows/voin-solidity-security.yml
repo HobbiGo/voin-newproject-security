@@ -21,6 +21,7 @@ jobs:
       FOUNDRY_OPTIMIZER_RUNS: "200"
       FOUNDRY_VIA_IR: "true"
       FOUNDRY_FUZZ_RUNS: "256"
+      BSC_RPC_URL: "https://bsc-rpc.publicnode.com"
 
     steps:
       - name: Checkout repository
@@ -64,7 +65,7 @@ jobs:
       - name: Compile contracts and tests
         run: forge build
 
-      - name: Verify all three test suites are detected
+      - name: Verify all four test suites are detected
         run: |
           forge test \
             --list \
@@ -101,6 +102,19 @@ jobs:
             'testFuzzUsdtDebitAndAllocationConservation' \
             detected-adversarial-tests.txt
 
+          forge test \
+            --list \
+            --match-contract '^VOINPresalePaymentsForkTest$' \
+            | tee detected-fork-tests.txt
+
+          grep -q \
+            'testForkQuotesMatchRealFeedAnswers' \
+            detected-fork-tests.txt
+
+          grep -q \
+            'testForkRealUsdtCodeApprovalPurchaseAndWithdrawal' \
+            detected-fork-tests.txt
+
       - name: Run existing isolated EVM tests
         run: |
           forge test \
@@ -117,4 +131,10 @@ jobs:
         run: |
           forge test \
             --match-contract '^VOINPresalePaymentsAdversarialTest$' \
+            -vvv
+
+      - name: Run pinned-block BNB mainnet fork tests
+        run: |
+          forge test \
+            --match-contract '^VOINPresalePaymentsForkTest$' \
             -vvv
