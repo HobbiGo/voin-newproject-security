@@ -35,20 +35,28 @@ jobs:
       - name: Show tool version
         run: forge --version
 
-      - name: Install OpenZeppelin v5.0.2
+      - name: Install OpenZeppelin v5.0.2 contracts only
         run: |
           mkdir -p lib
+
           git clone \
             --depth 1 \
             --branch v5.0.2 \
             https://github.com/OpenZeppelin/openzeppelin-contracts.git \
             lib/openzeppelin-contracts
 
+          git -C lib/openzeppelin-contracts \
+            sparse-checkout init --cone
+
+          git -C lib/openzeppelin-contracts \
+            sparse-checkout set contracts
+
           git -C lib/openzeppelin-contracts rev-parse HEAD
 
       - name: Configure OpenZeppelin import mapping
         run: |
           touch remappings.txt
+
           printf '\n@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\n' \
             >> remappings.txt
 
