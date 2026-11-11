@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 // Isolated tests with mocks. NOT mainnet transactions or an audit.
-import {VOINPresalePaymentsDraft} from "../src/VOINPresalePaymentsDraft-20261111-1733.sol";
+import {VOINPresalePaymentsDraft} from "./src/VOINPresalePaymentsDraft-20261111-1733.sol";
 
 interface VmPaymentsDraft {
     function chainId(uint256) external;
